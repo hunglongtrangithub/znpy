@@ -16,9 +16,12 @@ pub const VersionProps = struct {
 };
 
 const NpyFileReadError = error{
+    /// The file is not a valid .npy file.
     InvalidFile,
+    /// The format version is unsupported.
     UnsupportedVersion,
-    ReadError,
+    /// Error reading from file, due to I/O issues.
+    IoError,
 };
 
 const NpyHeaderParseError = error{
@@ -48,9 +51,14 @@ fn parseNpyHeader(header_buffer: []const u8, _: HeaderEncoding) !void {
 /// - file_reader: A file reader for the .npy file.
 /// Returns:
 /// - NpyFileReadError on failure.
-pub fn readNpyFile(file_reader: *std.fs.File.Reader) NpyFileReadError!void {
+pub fn readNpyFile(file_reader: *std.fs.File.Reader) (NpyFileReadError || error.OutOfMemory)!void {
     var byte_buffer: [8]u8 = undefined;
-    file_reader.interface.readSliceAll(byte_buffer[0..]) catch return NpyFileReadError.ReadError;
+    file_reader.interface.readSliceAll(byte_buffer[0..]) catch |e| {
+        switch (e) {
+            error.ReadFailed => return NpyFileReadError.ReadError,
+            error.EndOfStream => return NpyFileReadError.InvalidFile,
+        }
+    };
 
     if (std.mem.eql(u8, byte_buffer[0..6], MAGIC)) {
         std.debug.print("Valid .npy file detected.\n", .{});
@@ -85,12 +93,22 @@ pub fn readNpyFile(file_reader: *std.fs.File.Reader) NpyFileReadError!void {
     const header_size: u32 = header_size: switch (version_props.header_size_type) {
         .U16 => {
             var size_buffer: [2]u8 = undefined;
-            file_reader.interface.readSliceAll(size_buffer[0..]) catch return NpyFileReadError.ReadError;
+            file_reader.interface.readSliceAll(size_buffer[0..]) catch |e| {
+                switch (e) {
+                    error.ReadFailed => return NpyFileReadError.IoError,
+                    error.EndOfStream => return NpyFileReadError.InvalidFile,
+                }
+            };
             break :header_size std.mem.readInt(u16, &size_buffer, .little);
         },
         .U32 => {
             var size_buffer: [4]u8 = undefined;
-            file_reader.interface.readSliceAll(size_buffer[0..]) catch return NpyFileReadError.ReadError;
+            file_reader.interface.readSliceAll(size_buffer[0..]) catch |e| {
+                switch (e) {
+                    error.ReadFailed => return NpyFileReadError.IoError,
+                    error.EndOfStream => return NpyFileReadError.InvalidFile,
+                }
+            };
             break :header_size std.mem.readInt(u32, &size_buffer, .little);
         },
     };
@@ -102,20 +120,18 @@ pub fn readNpyFile(file_reader: *std.fs.File.Reader) NpyFileReadError!void {
     }
 
     // Now read the header content
-    // Choose allocator based on header size
-    var small_buffer: [1024]u8 = undefined;
-    const header_buffer = header_buffer: {
-        if (header_size > 1024) {
-            // Use heap allocator for large headers
-            break :header_buffer std.heap.page_allocator.alloc(u8, header_size) catch return NpyFileReadError.ReadError;
-        } else {
-            // Use stack buffer for small headers
-            break :header_buffer small_buffer[0..header_size];
+    // If header size is larger than 2014 bytes, use heap allocation
+    var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
+    const allocator = fallback.get();
+    const header_buffer = try allocator.alloc(u8, header_size);
+    defer allocator.free(header_buffer);
+
+    file_reader.interface.readSliceAll(header_buffer) catch |e| {
+        switch (e) {
+            error.ReadFailed => return NpyFileReadError.ReadError,
+            error.EndOfStream => return NpyFileReadError.InvalidFile,
         }
     };
-    defer if (header_size > 1024) std.heap.page_allocator.free(header_buffer);
-
-    file_reader.interface.readSliceAll(header_buffer) catch return NpyFileReadError.ReadError;
 
     std.debug.print("Header Content: {s}\n", .{header_buffer});
 
