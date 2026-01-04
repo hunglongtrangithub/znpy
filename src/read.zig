@@ -50,7 +50,7 @@ fn parseNpyHeader(header_buffer: []const u8, _: HeaderEncoding) !void {
 /// - NpyFileReadError on failure.
 pub fn readNpyFile(file_reader: *std.fs.File.Reader) NpyFileReadError!void {
     var byte_buffer: [8]u8 = undefined;
-    file_reader.interface.readSliceAll(&byte_buffer) catch return NpyFileReadError.ReadError;
+    file_reader.interface.readSliceAll(byte_buffer[0..]) catch return NpyFileReadError.ReadError;
 
     if (std.mem.eql(u8, byte_buffer[0..6], MAGIC)) {
         std.debug.print("Valid .npy file detected.\n", .{});
@@ -85,12 +85,12 @@ pub fn readNpyFile(file_reader: *std.fs.File.Reader) NpyFileReadError!void {
     const header_size: u32 = header_size: switch (version_props.header_size_type) {
         .U16 => {
             var size_buffer: [2]u8 = undefined;
-            file_reader.interface.readSliceAll(&size_buffer) catch return NpyFileReadError.ReadError;
+            file_reader.interface.readSliceAll(size_buffer[0..]) catch return NpyFileReadError.ReadError;
             break :header_size std.mem.readInt(u16, &size_buffer, .little);
         },
         .U32 => {
             var size_buffer: [4]u8 = undefined;
-            file_reader.interface.readSliceAll(&size_buffer) catch return NpyFileReadError.ReadError;
+            file_reader.interface.readSliceAll(size_buffer[0..]) catch return NpyFileReadError.ReadError;
             break :header_size std.mem.readInt(u32, &size_buffer, .little);
         },
     };
