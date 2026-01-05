@@ -4,12 +4,16 @@ const read = @import("../read.zig");
 const log = std.log.scoped(.npy_parser);
 const Token = lex.Token;
 
+/// The Abstract Syntax Tree for the parsed header content.
+/// Right now we only support maps, tuples, and literals.
 const Ast = union(enum) {
-    Map: std.StringHashMap(Ast),
+    Map: std.StringHashMapUnmanaged(Ast),
     Literal: lex.Literal,
     Tuple: std.ArrayList(usize),
 
-    pub fn deinit(self: Ast, allocator: std.mem.Allocator) void {
+    const Self = @This();
+
+    pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
         switch (self) {
             .Map => |map| {
                 var it = map.iterator();
@@ -17,7 +21,7 @@ const Ast = union(enum) {
                     entry.value_ptr.deinit(allocator);
                 }
                 var mut_map = map;
-                mut_map.deinit();
+                mut_map.deinit(allocator);
             },
             .Tuple => |tuple| {
                 var mut_tuple = tuple;
@@ -62,10 +66,10 @@ pub const Parser = struct {
 
     /// Parse a map. The opening brace has already been consumed.
     /// The map keys are strings, and values can be literals, tuples, or nested maps.
-    fn parseMap(self: *Self, allocator: std.mem.Allocator) BuildError!std.StringHashMap(Ast) {
+    fn parseMap(self: *Self, allocator: std.mem.Allocator) BuildError!std.StringHashMapUnmanaged(Ast) {
         log.info("Parsing map...", .{});
-        var map = std.StringHashMap(Ast).init(allocator);
-        errdefer map.deinit();
+        var map = std.StringHashMapUnmanaged(Ast).empty;
+        errdefer map.deinit(allocator);
 
         const State = union(enum) {
             /// Beginning state (at the opening brace)
@@ -107,19 +111,19 @@ pub const Parser = struct {
                         // Literal value
                         .Literal => |literal| {
                             std.log.info("Found literal value for key {s}: {}", .{ state.Key, literal });
-                            try map.put(state.Key, .{ .Literal = literal });
+                            try map.put(allocator, state.Key, .{ .Literal = literal });
                         },
                         .LParen => {
                             // Parse tuple value
                             const tuple = try self.parseTuple(allocator);
                             std.log.info("Found tuple value for key {s}: {}", .{ state.Key, tuple });
-                            try map.put(state.Key, .{ .Tuple = tuple });
+                            try map.put(allocator, state.Key, .{ .Tuple = tuple });
                         },
                         .LBrace => {
                             // Parse nested map value
                             const nested_map = try self.parseMap(allocator);
                             std.log.info("Found nested map value for key {s}: {}", .{ state.Key, nested_map });
-                            try map.put(state.Key, .{ .Map = nested_map });
+                            try map.put(allocator, state.Key, .{ .Map = nested_map });
                         },
                         else => return ParserError.InvalidValue,
                     }
@@ -229,6 +233,7 @@ pub const Parser = struct {
         return list;
     }
 
+    /// Parse the header content into an AST.
     pub fn parse(self: *Self, allocator: std.mem.Allocator) BuildError!Ast {
         const token = try self.lexer.advance();
         switch (token) {
