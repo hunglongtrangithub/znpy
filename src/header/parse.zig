@@ -160,7 +160,7 @@ pub const Parser = struct {
     fn parseTuple(self: *Self, allocator: std.mem.Allocator) BuildError!std.ArrayList(usize) {
         log.info("Parsing tuple...", .{});
         var list = std.ArrayList(usize).empty;
-        errdefer list.deinit(std.heap.page_allocator);
+        errdefer list.deinit(allocator);
 
         const State = enum {
             /// Beginning state (at the opening parenthesis)
@@ -258,3 +258,232 @@ pub const Parser = struct {
         }
     }
 };
+
+test "parse empty map" {
+    const input = "{}";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
+    try std.testing.expectEqual(@as(usize, 0), ast.Map.count());
+}
+
+test "parse map with string literal" {
+    const input = "{'descr': '<f8'}";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
+    const descr = ast.Map.get("descr").?;
+    try std.testing.expectEqual(Ast.Literal, @as(std.meta.Tag(Ast), descr));
+    try std.testing.expectEqualStrings("<f8", descr.Literal.String);
+}
+
+test "parse map with boolean literal" {
+    const input = "{'fortran_order': False}";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
+    const fortran = ast.Map.get("fortran_order").?;
+    try std.testing.expectEqual(Ast.Literal, @as(std.meta.Tag(Ast), fortran));
+    try std.testing.expectEqual(false, fortran.Literal.Boolean);
+}
+
+test "parse map with empty tuple" {
+    const input = "{'shape': ()}";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
+    const shape = ast.Map.get("shape").?;
+    try std.testing.expectEqual(Ast.Tuple, @as(std.meta.Tag(Ast), shape));
+    try std.testing.expectEqual(@as(usize, 0), shape.Tuple.items.len);
+}
+
+test "parse map with single-element tuple" {
+    const input = "{'shape': (5,)}";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
+    const shape = ast.Map.get("shape").?;
+    try std.testing.expectEqual(Ast.Tuple, @as(std.meta.Tag(Ast), shape));
+    try std.testing.expectEqual(@as(usize, 1), shape.Tuple.items.len);
+    try std.testing.expectEqual(@as(usize, 5), shape.Tuple.items[0]);
+}
+
+test "parse map with multi-element tuple" {
+    const input = "{'shape': (3, 4, 5)}";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
+    const shape = ast.Map.get("shape").?;
+    try std.testing.expectEqual(Ast.Tuple, @as(std.meta.Tag(Ast), shape));
+    try std.testing.expectEqual(@as(usize, 3), shape.Tuple.items.len);
+    try std.testing.expectEqual(@as(usize, 3), shape.Tuple.items[0]);
+    try std.testing.expectEqual(@as(usize, 4), shape.Tuple.items[1]);
+    try std.testing.expectEqual(@as(usize, 5), shape.Tuple.items[2]);
+}
+
+test "parse map with trailing comma" {
+    const input = "{'descr': '<f8', 'fortran_order': False,}";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
+    try std.testing.expectEqual(@as(usize, 2), ast.Map.count());
+}
+
+test "parse complete npy header" {
+    const input = "{'descr': '<f8', 'fortran_order': False, 'shape': (3, 4)}";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
+    try std.testing.expectEqual(@as(usize, 3), ast.Map.count());
+}
+
+test "parse nested map" {
+    const input = "{'outer': {'inner': 'value'}}";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
+    const outer = ast.Map.get("outer").?;
+    try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), outer));
+    const inner = outer.Map.get("inner").?;
+    try std.testing.expectEqualStrings("value", inner.Literal.String);
+}
+
+test "parse top-level tuple" {
+    const input = "(1, 2, 3)";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Tuple, @as(std.meta.Tag(Ast), ast));
+    try std.testing.expectEqual(@as(usize, 3), ast.Tuple.items.len);
+}
+
+test "parse top-level literal" {
+    const input = "'standalone'";
+    var parser = Parser.init(input, .Ascii);
+    const ast = try parser.parse(std.testing.allocator);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Ast.Literal, @as(std.meta.Tag(Ast), ast));
+    try std.testing.expectEqualStrings("standalone", ast.Literal.String);
+}
+
+test "error on empty input" {
+    const input = "";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.EmptyInput, parser.parse(std.testing.allocator));
+}
+
+test "error on literal followed by more tokens" {
+    const input = "'value' 123";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.LiteralFollowedByMoreTokens, parser.parse(std.testing.allocator));
+}
+
+test "error on misplaced closing brace" {
+    const input = "}";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.MisplacedToken, parser.parse(std.testing.allocator));
+}
+
+test "error on misplaced closing paren" {
+    const input = ")";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.MisplacedToken, parser.parse(std.testing.allocator));
+}
+
+test "error on misplaced colon" {
+    const input = ":";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.MisplacedToken, parser.parse(std.testing.allocator));
+}
+
+test "error on misplaced comma" {
+    const input = ",";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.MisplacedToken, parser.parse(std.testing.allocator));
+}
+
+test "error on invalid key (number)" {
+    const input = "{123: 'value'}";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.InvalidKey, parser.parse(std.testing.allocator));
+}
+
+test "error on invalid key (boolean)" {
+    const input = "{True: 'value'}";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.InvalidKey, parser.parse(std.testing.allocator));
+}
+
+test "error on missing colon after key" {
+    const input = "{'key' 'value'}";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.MissingColonAfterKey, parser.parse(std.testing.allocator));
+}
+
+test "error on missing comma after value" {
+    const input = "{'key1': 'value1' 'key2': 'value2'}";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.MissingCommaAfterValue, parser.parse(std.testing.allocator));
+}
+
+test "error on invalid value (closing brace)" {
+    const input = "{'key': }";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.InvalidValue, parser.parse(std.testing.allocator));
+}
+
+test "error on invalid tuple element (string)" {
+    const input = "('string',)";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.InvalidTupleElement, parser.parse(std.testing.allocator));
+}
+
+test "error on invalid tuple element (boolean)" {
+    const input = "(True,)";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.InvalidTupleElement, parser.parse(std.testing.allocator));
+}
+
+test "error on missing trailing comma in single-element tuple" {
+    const input = "(5)";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.MissingTrailingComma, parser.parse(std.testing.allocator));
+}
+
+test "error on invalid trailing comma in multi-element tuple" {
+    const input = "(1, 2, 3,)";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.InvalidTrailingComma, parser.parse(std.testing.allocator));
+}
+
+test "error on invalid syntax in tuple (double comma)" {
+    const input = "(1,, 2)";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.InvalidSyntax, parser.parse(std.testing.allocator));
+}
+
+test "error on invalid key after comma" {
+    const input = "{'key1': 'value1', 123}";
+    var parser = Parser.init(input, .Ascii);
+    try std.testing.expectError(ParserError.InvalidKey, parser.parse(std.testing.allocator));
+}
