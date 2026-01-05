@@ -2,6 +2,7 @@ const std = @import("std");
 const log = std.log.scoped(.npy_lexer);
 const HeaderEncoding = @import("../read.zig").HeaderEncoding;
 
+/// A literal value in the .npy header.
 pub const Literal = union(enum) {
     String: []const u8,
     Number: usize,
@@ -230,24 +231,6 @@ pub const NpyHeaderLexer = struct {
         return token;
     }
 };
-
-/// Display the token for debugging purposes.
-pub fn display_token(token: Token) void {
-    switch (token) {
-        .LBrace => log.debug("LBrace", .{}),
-        .RBrace => log.debug("RBrace", .{}),
-        .Colon => log.debug("Colon", .{}),
-        .Comma => log.debug("Comma", .{}),
-        .LParen => log.debug("LParen", .{}),
-        .RParen => log.debug("RParen", .{}),
-        .Literal => |lit| switch (lit) {
-            .Number => |num| log.debug("Number: {}", .{num}),
-            .String => |str| log.debug("String: {s}", .{str}),
-            .Boolean => |b| log.debug("Boolean: {}", .{b}),
-        },
-        .EOF => log.debug("EOF", .{}),
-    }
-}
 
 fn expectToken(expected: LexerError!Token, actual: LexerError!Token) !void {
     if (expected) |expected_token| {
