@@ -207,7 +207,7 @@ pub const NpyHeaderLexer = struct {
     }
 
     /// Peek at the next token without consuming it.
-    /// If there are no more tokens, return EndOfInput token.
+    /// If there are no more tokens, return EOF token.
     pub fn peek(self: *Self) LexerError!Token {
         if (self.peeked) |peeked| {
             return peeked;
@@ -219,7 +219,7 @@ pub const NpyHeaderLexer = struct {
     }
 
     /// Advance to the next token and return it.
-    /// If there are no more tokens, return EndOfInput token.
+    /// If there are no more tokens, return EOF token.
     pub fn advance(self: *Self) LexerError!Token {
         const token = if (self.peeked) |peeked| blk: {
             self.peeked = null;

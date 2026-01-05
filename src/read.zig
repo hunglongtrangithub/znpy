@@ -1,6 +1,8 @@
 const std = @import("std");
 const log = std.log.scoped(.npy_reader);
-const readNpyHeaderData = @import("header/header_data.zig").readNpyHeaderData;
+const header = @import("header/root.zig");
+const readNpyHeaderData = header.readNpyHeaderData;
+const NpyHeaderData = header.NpyHeaderData;
 const Parser = @import("header/parse.zig").Parser;
 
 pub const HeaderEncoding = enum {
@@ -23,6 +25,8 @@ const NpyFileReadError = error{
     InvalidFile,
     /// The format version is unsupported.
     UnsupportedVersion,
+    /// Fortran order is not supported.
+    FortranOrderNotSupported,
     /// Error reading from file, due to I/O issues.
     IoError,
 };
@@ -34,13 +38,13 @@ const NpyHeaderParseError = error{
 
 const MAGIC = "\x93NUMPY";
 
-/// Parses the .npy header content.
+/// Processes the .npy header content into a structured format.
 /// Parameters:
 /// - header_buffer: The buffer containing the header content.
 /// - header_encoding: The encoding type of the header.
 /// Returns:
 /// - Parsed Python value on success, or an error on failure.
-fn parseNpyHeader(header_buffer: []const u8, header_encoding: HeaderEncoding) NpyHeaderParseError!void {
+fn processNpyHeader(header_buffer: []const u8, header_encoding: HeaderEncoding, allocator: std.mem.Allocator) NpyHeaderParseError!NpyHeaderData {
     // Check for ending newline
     if (header_buffer.len == 0 or header_buffer[header_buffer.len - 1] != '\n') {
         return NpyHeaderParseError.EndingNewlineMissing;
@@ -49,11 +53,12 @@ fn parseNpyHeader(header_buffer: []const u8, header_encoding: HeaderEncoding) Np
     const trimmed_header = std.mem.trimRight(u8, header_buffer[0 .. header_buffer.len - 1], " ");
     log.debug("Trimmed Header: |{s}|", .{trimmed_header});
 
-    const header_data = readNpyHeaderData(trimmed_header, header_encoding, std.heap.page_allocator) catch |e| {
+    const header_data = readNpyHeaderData(trimmed_header, header_encoding, allocator) catch |e| {
         log.err("Error reading header data: {any}", .{e});
         return NpyHeaderParseError.InvalidHeaderFormat;
     };
     log.info("Parsed Header Data: descr='{s}', fortran_order={}, shape={any}", .{ header_data.descr, header_data.fortran_order, header_data.shape });
+    return header_data;
 }
 
 /// Reads and validates a .npy file header.
@@ -130,7 +135,7 @@ pub fn readNpyFile(file_reader: *std.fs.File.Reader) (NpyFileReadError || std.me
     }
 
     // Now read the header content
-    // If header size is larger than 2014 bytes, use heap allocation
+    // If header size is larger than 1024 bytes, use heap allocation
     var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
     const allocator = fallback.get();
     const header_buffer = try allocator.alloc(u8, header_size);
@@ -145,8 +150,13 @@ pub fn readNpyFile(file_reader: *std.fs.File.Reader) (NpyFileReadError || std.me
 
     log.debug("Header Content: {s}", .{header_buffer});
 
-    _ = parseNpyHeader(header_buffer, version_props.encoding) catch |e| {
+    const header_data = processNpyHeader(header_buffer, version_props.encoding, allocator) catch |e| {
         log.err("Error parsing header: {any}", .{e});
         return NpyFileReadError.InvalidFile;
     };
+
+    if (header_data.fortran_order) {
+        log.err("Fortran order arrays are not supported.", .{});
+        return NpyFileReadError.FortranOrderNotSupported;
+    }
 }

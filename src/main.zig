@@ -1,13 +1,6 @@
 const std = @import("std");
 const znpy = @import("znpy");
 
-pub const std_options: std.Options = .{
-    .log_level = .debug,
-    .log_scope_levels = &[_]std.log.ScopeLevel{
-        .{ .scope = .npy_parser, .level = .debug },
-    },
-};
-
 pub fn main() !void {
     const npy_file_path = "test-data/plain.npy";
     const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
