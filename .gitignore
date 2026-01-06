@@ -12,3 +12,4 @@ wheels/
 # Zig build files
 zig-out/
 .zig-cache/
+test-data/
