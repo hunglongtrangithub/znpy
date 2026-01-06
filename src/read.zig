@@ -57,7 +57,7 @@ fn processNpyHeader(header_buffer: []const u8, header_encoding: HeaderEncoding, 
         log.err("Error reading header data: {any}", .{e});
         return NpyHeaderParseError.InvalidHeaderFormat;
     };
-    log.info("Parsed Header Data: descr='{s}', fortran_order={}, shape={any}", .{ header_data.descr, header_data.fortran_order, header_data.shape });
+    log.info("Parsed Header Data: descr={}, fortran_order={}, shape={any}", .{ header_data.descr, header_data.fortran_order, header_data.shape });
     return header_data;
 }
 

@@ -1,25 +1,51 @@
+//! Module for reading and parsing .npy file headers.
+//!
+//! This module provides functionality to parse the header dictionary from NumPy `.npy` files.
+//! The header contains metadata about the array stored in the file.
+//!
+//! ## Supported Grammar
+//!
+//! The header must be a Python dictionary-like structure with the following grammar
+//! (whitespace is ignored):
+//!
+//! ```
+//! header          ::= "{" key_value_pairs "}"
+//! key_value_pairs ::= key_value_pair ("," key_value_pair)* ","?
+//! key_value_pair  ::= "'" key "'" ":" value
+//! key             ::= "descr" | "fortran_order" | "shape"
+//! value           ::= string_literal | boolean_literal | tuple
+//! string_literal  ::= "'" string "'"
+//! boolean_literal ::= "True" | "False"
+//! tuple           ::= "()" | "(" number ",)" | "(" number ("," number)+ ","? ")"
+//! number          ::= [0-9]+
+//! string          ::= any sequence of characters except "'"
+//! ```
+//!
+//! ## Required Keys
+//!
+//! - `descr`: A string describing the data type. Syntax: `<endianness><type kind><size in bytes>` (e.g., `'<f8'` for little-endian float64)
+//! - `fortran_order`: A boolean indicating whether the array is stored in Fortran (column-major) order
+//! - `shape`: A tuple of integers representing the array dimensions
+//!
+//! ## Example
+//!
+//! ```
+//! {'descr': '<f8', 'fortran_order': False, 'shape': (3, 4)}
+//! ```
 const std = @import("std");
 const lex = @import("lex.zig");
 const parse = @import("parse.zig");
 const read = @import("../read.zig");
+const descr = @import("descr.zig");
+
+pub const Endianness = descr.Endianness;
+pub const ElementType = descr.ElementType;
 
 /// NpyHeaderData represents the parsed header information from a .npy file.
-/// We only accept the value of `descr` as a string only for now.
-/// The grammar for the header that we support is as follows (any whitespaces are ignored):
-/// ```
-/// header ::= "{" key_value_pairs "}"
-/// key_value_pairs ::= key_value_pair ("," key_value_pair)* ","?
-/// key_value_pair ::= "'" key "'" ":" value
-/// key ::= "descr" | "fortran_order" | "shape"
-/// value ::= "'" string "'" | "True" | "False" | tuple
-/// tuple ::= "()" | "(" number ",)" | "(" number ("," number)+ ")"
-/// number ::= [0-9]+
-/// string ::= any sequence of characters except "'"
-/// ```
 pub const NpyHeaderData = struct {
-    descr: []const u8,
-    fortran_order: bool,
     shape: []usize,
+    descr: descr.DescrData,
+    fortran_order: bool,
 };
 
 pub const ReadHeaderDataError = error{
@@ -31,6 +57,7 @@ pub const ReadHeaderDataError = error{
     InvalidDescrValue,
     ExpectedKeyShape,
     InvalidShapeValue,
+    UnsupportedDescrType,
 };
 
 pub fn readNpyHeaderData(header_buffer: []const u8, header_encoding: read.HeaderEncoding, allocator: std.mem.Allocator) (ReadHeaderDataError || std.mem.Allocator.Error)!NpyHeaderData {
@@ -51,7 +78,12 @@ pub fn readNpyHeaderData(header_buffer: []const u8, header_encoding: read.Header
             const descr_ast = map.get("descr") orelse return ReadHeaderDataError.ExpectedKeyDescr;
             switch (descr_ast) {
                 .Literal => |lit| switch (lit) {
-                    .String => |s| header_data.descr = s,
+                    .String => |s| header_data.descr = descr.parseDescr(s) catch |e| {
+                        switch (e) {
+                            descr.ParseDescrError.UnsupportedType => return ReadHeaderDataError.UnsupportedDescrType,
+                            else => return ReadHeaderDataError.InvalidDescrValue,
+                        }
+                    },
                     else => return ReadHeaderDataError.InvalidDescrValue,
                 },
                 else => return ReadHeaderDataError.InvalidDescrValue,
