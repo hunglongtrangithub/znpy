@@ -10,7 +10,7 @@ pub fn main() !void {
 
     var file_buffer: [1024]u8 = undefined;
     var file_reader = file.reader(file_buffer[0..]);
-    znpy.readNpyFile(&file_reader) catch |e| {
+    znpy.readNpyFile(&file_reader.interface) catch |e| {
         std.debug.print("Error reading .npy file: {any}\n", .{e});
     };
 }

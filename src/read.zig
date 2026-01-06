@@ -21,8 +21,12 @@ pub const VersionProps = struct {
 };
 
 const NpyFileReadError = error{
-    /// The file is not a valid .npy file.
-    InvalidFile,
+    /// The file is too short to be a valid .npy file.
+    TooShort,
+    /// Magic sequence does not match the expected value.
+    MagicMismatch,
+    /// The file does not have a valid header.
+    InvalidHeader,
     /// The format version is unsupported.
     UnsupportedVersion,
     /// Fortran order is not supported.
@@ -63,27 +67,27 @@ fn processNpyHeader(header_buffer: []const u8, header_encoding: HeaderEncoding, 
 
 /// Reads and validates a .npy file header.
 /// Paramters:
-/// - file_reader: A file reader for the .npy file.
+/// - reader: The reader to read the .npy file from, or any reader implementing `std.io.Reader`.
 /// Returns:
 /// - NpyFileReadError on failure.
-pub fn readNpyFile(file_reader: *std.fs.File.Reader) (NpyFileReadError || std.mem.Allocator.Error)!void {
-    var byte_buffer: [8]u8 = undefined;
-    file_reader.interface.readSliceAll(byte_buffer[0..]) catch |e| {
+pub fn readNpyFile(reader: *std.Io.Reader) (NpyFileReadError || std.mem.Allocator.Error)!void {
+    var eight_byte_buffer: [8]u8 = undefined;
+    reader.readSliceAll(eight_byte_buffer[0..]) catch |e| {
         switch (e) {
             error.ReadFailed => return NpyFileReadError.IoError,
-            error.EndOfStream => return NpyFileReadError.InvalidFile,
+            error.EndOfStream => return NpyFileReadError.TooShort,
         }
     };
 
-    if (std.mem.eql(u8, byte_buffer[0..6], MAGIC)) {
+    if (std.mem.eql(u8, eight_byte_buffer[0..6], MAGIC)) {
         log.info("Valid .npy file detected.", .{});
     } else {
         log.err("Invalid .npy file: Magic number mismatch.", .{});
-        return NpyFileReadError.InvalidFile;
+        return NpyFileReadError.MagicMismatch;
     }
 
-    const major_version = byte_buffer[6];
-    const minor_version = byte_buffer[7];
+    const major_version = eight_byte_buffer[6];
+    const minor_version = eight_byte_buffer[7];
 
     const version_props: VersionProps = version: {
         if (minor_version != 0) {
@@ -108,20 +112,20 @@ pub fn readNpyFile(file_reader: *std.fs.File.Reader) (NpyFileReadError || std.me
     const header_size: u32 = header_size: switch (version_props.header_size_type) {
         .U16 => {
             var size_buffer: [2]u8 = undefined;
-            file_reader.interface.readSliceAll(size_buffer[0..]) catch |e| {
+            reader.readSliceAll(size_buffer[0..]) catch |e| {
                 switch (e) {
                     error.ReadFailed => return NpyFileReadError.IoError,
-                    error.EndOfStream => return NpyFileReadError.InvalidFile,
+                    error.EndOfStream => return NpyFileReadError.TooShort,
                 }
             };
             break :header_size std.mem.readInt(u16, &size_buffer, .little);
         },
         .U32 => {
             var size_buffer: [4]u8 = undefined;
-            file_reader.interface.readSliceAll(size_buffer[0..]) catch |e| {
+            reader.readSliceAll(size_buffer[0..]) catch |e| {
                 switch (e) {
                     error.ReadFailed => return NpyFileReadError.IoError,
-                    error.EndOfStream => return NpyFileReadError.InvalidFile,
+                    error.EndOfStream => return NpyFileReadError.TooShort,
                 }
             };
             break :header_size std.mem.readInt(u32, &size_buffer, .little);
@@ -141,10 +145,10 @@ pub fn readNpyFile(file_reader: *std.fs.File.Reader) (NpyFileReadError || std.me
     const header_buffer = try allocator.alloc(u8, header_size);
     defer allocator.free(header_buffer);
 
-    file_reader.interface.readSliceAll(header_buffer) catch |e| {
+    reader.readSliceAll(header_buffer) catch |e| {
         switch (e) {
             error.ReadFailed => return NpyFileReadError.IoError,
-            error.EndOfStream => return NpyFileReadError.InvalidFile,
+            error.EndOfStream => return NpyFileReadError.TooShort,
         }
     };
 
@@ -152,7 +156,7 @@ pub fn readNpyFile(file_reader: *std.fs.File.Reader) (NpyFileReadError || std.me
 
     const header_data = processNpyHeader(header_buffer, version_props.encoding, allocator) catch |e| {
         log.err("Error parsing header: {any}", .{e});
-        return NpyFileReadError.InvalidFile;
+        return NpyFileReadError.InvalidHeader;
     };
 
     if (header_data.fortran_order) {
