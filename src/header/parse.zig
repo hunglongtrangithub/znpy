@@ -42,7 +42,6 @@ const ParserError = error{
     InvalidValue,
     InvalidTupleElement,
     MissingTrailingComma,
-    InvalidTrailingComma,
     InvalidSyntax,
 };
 
@@ -217,12 +216,7 @@ pub const Parser = struct {
                                 else => return ParserError.InvalidTupleElement,
                             }
                         },
-                        .RParen => switch (list.items.len) {
-                            // Single-element tuple with trailing comma
-                            1 => state = .Final,
-                            // Trailing comma not allowed for multi-element tuple
-                            else => return ParserError.InvalidTrailingComma,
-                        },
+                        .RParen => state = .Final,
                         else => return ParserError.InvalidSyntax,
                     }
                 },
@@ -468,12 +462,6 @@ test "error on missing trailing comma in single-element tuple" {
     const input = "(5)";
     var parser = Parser.init(input, .Ascii);
     try std.testing.expectError(ParserError.MissingTrailingComma, parser.parse(std.testing.allocator));
-}
-
-test "error on invalid trailing comma in multi-element tuple" {
-    const input = "(1, 2, 3,)";
-    var parser = Parser.init(input, .Ascii);
-    try std.testing.expectError(ParserError.InvalidTrailingComma, parser.parse(std.testing.allocator));
 }
 
 test "error on invalid syntax in tuple (double comma)" {
