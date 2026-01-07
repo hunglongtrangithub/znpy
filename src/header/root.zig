@@ -102,6 +102,8 @@ pub const Header = struct {
     const MAGIC = "\x93NUMPY";
 
     /// Reads and parses the header from a reader (`std.io.Reader`).
+    /// The reader should be positioned at the start of the .npy file.
+    /// On success, the reader stops right after the header content.
     pub fn fromReader(reader: *std.io.Reader, allocator: std.mem.Allocator) ReadHeaderError!Self {
         var eight_byte_buffer: [8]u8 = undefined;
         reader.readSliceAll(eight_byte_buffer[0..]) catch {
