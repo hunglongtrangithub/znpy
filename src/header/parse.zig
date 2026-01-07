@@ -7,8 +7,11 @@ const Token = lex.Token;
 /// The Abstract Syntax Tree for the parsed header content.
 /// Right now we only support maps, tuples, and literals.
 const Ast = union(enum) {
+    /// Map of string keys to AST values
     Map: std.StringHashMapUnmanaged(Ast),
+    /// A literal value of type `lex.Literal`
     Literal: lex.Literal,
+    /// A tuple of number literals
     Tuple: std.ArrayList(usize),
 
     const Self = @This();
@@ -18,6 +21,7 @@ const Ast = union(enum) {
             .Map => |map| {
                 var it = map.iterator();
                 while (it.next()) |entry| {
+                    // NOTE: Recursively deinit the value AST. Is there a better approach?
                     entry.value_ptr.deinit(allocator);
                 }
                 var mut_map = map;

@@ -63,8 +63,8 @@ const ParseHeaderError = error{
     MagicMismatch,
     /// The format version is unsupported.
     UnsupportedVersion,
-    /// The header length is too large to be a `usize`.
-    HeaderLengthOverflow,
+    /// The header size is too large to be a `usize`.
+    HeaderSizeOverflow,
     /// The header does not end with a newline character.
     MissingNewline,
     /// The file does not have a valid header.
@@ -89,7 +89,7 @@ const ParseHeaderError = error{
     UnsupportedDescrType,
 };
 
-const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error;
+pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error;
 
 /// Represents the parsed header information from a .npy file.
 pub const Header = struct {
@@ -137,7 +137,7 @@ pub const Header = struct {
                     return ParseHeaderError.IoError;
                 };
                 const size = std.mem.readInt(u16, &size_buffer, .little);
-                break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderLengthOverflow;
+                break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderSizeOverflow;
             },
             .U32 => {
                 var size_buffer: [4]u8 = undefined;
@@ -145,7 +145,7 @@ pub const Header = struct {
                     return ParseHeaderError.IoError;
                 };
                 const size = std.mem.readInt(u32, &size_buffer, .little);
-                break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderLengthOverflow;
+                break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderSizeOverflow;
             },
         };
 
