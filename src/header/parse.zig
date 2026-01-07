@@ -66,7 +66,6 @@ pub const Parser = struct {
     /// Parse a map. The opening brace has already been consumed.
     /// The map keys are strings, and values can be literals, tuples, or nested maps.
     fn parseMap(self: *Self, allocator: std.mem.Allocator) BuildError!std.StringHashMapUnmanaged(Ast) {
-        log.info("Parsing map...", .{});
         var map = std.StringHashMapUnmanaged(Ast).empty;
         errdefer map.deinit(allocator);
 
@@ -93,7 +92,6 @@ pub const Parser = struct {
                     // Expect string literal as key
                     switch (k) {
                         .String => |s| {
-                            log.info("Found key: {s}", .{s});
                             state = .{ .Key = s };
                         },
                         else => return ParserError.InvalidKey,
@@ -109,19 +107,16 @@ pub const Parser = struct {
                     switch (try self.lexer.advance()) {
                         // Literal value
                         .Literal => |literal| {
-                            std.log.info("Found literal value for key {s}: {}", .{ state.Key, literal });
                             try map.put(allocator, state.Key, .{ .Literal = literal });
                         },
                         .LParen => {
                             // Parse tuple value
                             const tuple = try self.parseTuple(allocator);
-                            std.log.info("Found tuple value for key {s}: {}", .{ state.Key, tuple });
                             try map.put(allocator, state.Key, .{ .Tuple = tuple });
                         },
                         .LBrace => {
                             // Parse nested map value
                             const nested_map = try self.parseMap(allocator);
-                            std.log.info("Found nested map value for key {s}: {}", .{ state.Key, nested_map });
                             try map.put(allocator, state.Key, .{ .Map = nested_map });
                         },
                         else => return ParserError.InvalidValue,
@@ -136,7 +131,6 @@ pub const Parser = struct {
                             // Expect string literal as key
                             switch (k) {
                                 .String => |s| {
-                                    log.info("Found key: {s}", .{s});
                                     state = .{ .Key = s };
                                 },
                                 else => return ParserError.InvalidKey,
@@ -157,7 +151,6 @@ pub const Parser = struct {
     /// Parse a tuple. The opening parenthesis has already been consumed.
     /// The tuple can only contain number literals.
     fn parseTuple(self: *Self, allocator: std.mem.Allocator) BuildError!std.ArrayList(usize) {
-        log.info("Parsing tuple...", .{});
         var list = std.ArrayList(usize).empty;
         errdefer list.deinit(allocator);
 
@@ -233,16 +226,13 @@ pub const Parser = struct {
         switch (token) {
             .EOF => return ParserError.EmptyInput,
             .LBrace => {
-                log.info("Parsing top-level map...", .{});
                 return .{ .Map = try self.parseMap(allocator) };
             },
             .LParen => {
-                log.info("Parsing top-level tuple...", .{});
                 return .{ .Tuple = try self.parseTuple(allocator) };
             },
             .RBrace, .RParen, .Colon, .Comma => return ParserError.MisplacedToken,
             .Literal => |literal| {
-                log.info("Parsing top-level literal...", .{});
                 // No more tokens should follow a literal
                 if (try self.lexer.peek() != .EOF) {
                     return ParserError.LiteralFollowedByMoreTokens;

@@ -62,7 +62,9 @@ pub const ReadHeaderDataError = error{
 
 pub fn readNpyHeaderData(header_buffer: []const u8, header_encoding: read.HeaderEncoding, allocator: std.mem.Allocator) (ReadHeaderDataError || std.mem.Allocator.Error)!NpyHeaderData {
     var parser = parse.Parser.init(header_buffer, header_encoding);
-    const ast = parser.parse(allocator) catch return ReadHeaderDataError.InvalidHeaderFormat;
+    const ast = parser.parse(allocator) catch {
+        return ReadHeaderDataError.InvalidHeaderFormat;
+    };
     defer ast.deinit(allocator);
 
     var header_data = NpyHeaderData{

@@ -121,7 +121,7 @@ pub const NpyHeaderLexer = struct {
 
         // We expect an ASCII character here. UTF-8 multi-byte characters can only exist in string literals.
         const char = if (self.position < self.input.len) self.input[self.position] else return .EOF;
-        log.debug("char: {c} position: {}", .{ char, self.position });
+
         const token: Token = switch (char) {
             '{' => blk: {
                 self.position += 1;
@@ -227,7 +227,6 @@ pub const NpyHeaderLexer = struct {
             break :blk peeked;
         } else try self.lexNext();
 
-        log.debug("Advanced to token: {any}", .{token});
         return token;
     }
 };

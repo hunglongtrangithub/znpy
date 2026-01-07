@@ -29,8 +29,6 @@ const NpyFileReadError = error{
     InvalidHeader,
     /// The format version is unsupported.
     UnsupportedVersion,
-    /// Fortran order is not supported.
-    FortranOrderNotSupported,
     /// Error reading from file, due to I/O issues.
     IoError,
 };
@@ -55,13 +53,11 @@ fn processNpyHeader(header_buffer: []const u8, header_encoding: HeaderEncoding, 
     }
     // Trim newline and spaces right before it
     const trimmed_header = std.mem.trimRight(u8, header_buffer[0 .. header_buffer.len - 1], " ");
-    log.debug("Trimmed Header: |{s}|", .{trimmed_header});
 
-    const header_data = readNpyHeaderData(trimmed_header, header_encoding, allocator) catch |e| {
-        log.err("Error reading header data: {any}", .{e});
+    const header_data = readNpyHeaderData(trimmed_header, header_encoding, allocator) catch {
         return NpyHeaderParseError.InvalidHeaderFormat;
     };
-    log.info("Parsed Header Data: descr={}, fortran_order={}, shape={any}", .{ header_data.descr, header_data.fortran_order, header_data.shape });
+
     return header_data;
 }
 
@@ -79,10 +75,7 @@ pub fn readNpyFile(reader: *std.Io.Reader) (NpyFileReadError || std.mem.Allocato
         }
     };
 
-    if (std.mem.eql(u8, eight_byte_buffer[0..6], MAGIC)) {
-        log.info("Valid .npy file detected.", .{});
-    } else {
-        log.err("Invalid .npy file: Magic number mismatch.", .{});
+    if (!std.mem.eql(u8, eight_byte_buffer[0..6], MAGIC)) {
         return NpyFileReadError.MagicMismatch;
     }
 
@@ -91,22 +84,15 @@ pub fn readNpyFile(reader: *std.Io.Reader) (NpyFileReadError || std.mem.Allocato
 
     const version_props: VersionProps = version: {
         if (minor_version != 0) {
-            log.err("Unsupported .npy version: {}.{}", .{ major_version, minor_version });
             return NpyFileReadError.UnsupportedVersion;
         }
         switch (major_version) {
             1 => break :version .{ .header_size_type = .U16, .encoding = .Ascii },
             2 => break :version .{ .header_size_type = .U32, .encoding = .Ascii },
             3 => break :version .{ .header_size_type = .U32, .encoding = .Utf8 },
-            else => {
-                log.err("Unsupported .npy major version: {}", .{major_version});
-                return NpyFileReadError.UnsupportedVersion;
-            },
+            else => return NpyFileReadError.UnsupportedVersion,
         }
     };
-
-    log.info("Version: {}.{}", .{ major_version, minor_version });
-    log.debug("Version Props: {any}", .{version_props});
 
     // Read the header size in little-endian format
     const header_size: u32 = header_size: switch (version_props.header_size_type) {
@@ -132,12 +118,6 @@ pub fn readNpyFile(reader: *std.Io.Reader) (NpyFileReadError || std.mem.Allocato
         },
     };
 
-    log.debug("Header Size: 0x{x:0>2}", .{header_size});
-
-    for (std.mem.asBytes(&header_size), 0..) |byte, i| {
-        log.debug("Header Byte [{}]: 0x{x:0>2}", .{ i, byte });
-    }
-
     // Now read the header content
     // If header size is larger than 1024 bytes, use heap allocation
     var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
@@ -152,15 +132,9 @@ pub fn readNpyFile(reader: *std.Io.Reader) (NpyFileReadError || std.mem.Allocato
         }
     };
 
-    log.debug("Header Content: {s}", .{header_buffer});
-
-    const header_data = processNpyHeader(header_buffer, version_props.encoding, allocator) catch |e| {
-        log.err("Error parsing header: {any}", .{e});
+    const header_data = processNpyHeader(header_buffer, version_props.encoding, allocator) catch {
         return NpyFileReadError.InvalidHeader;
     };
 
-    if (header_data.fortran_order) {
-        log.err("Fortran order arrays are not supported.", .{});
-        return NpyFileReadError.FortranOrderNotSupported;
-    }
+    log.info("Successfully read .npy header: {any}", .{header_data});
 }
