@@ -43,6 +43,49 @@ pub const ElementType = enum {
     Complex64,
     /// 64-bit floating point complex number - dtype code: 'c16'
     Complex128,
+
+    const Self = @This();
+
+    pub const FromZigTypeError = error{UnsupportedType};
+
+    pub fn fromZigType(t: type) FromZigTypeError!Self {
+        return switch (t) {
+            bool => .Bool,
+            i8 => .Int8,
+            i16 => .Int16,
+            i32 => .Int32,
+            i64 => .Int64,
+            u8 => .UInt8,
+            u16 => .UInt16,
+            u32 => .UInt32,
+            u64 => .UInt64,
+            f32 => .Float32,
+            f64 => .Float64,
+            f128 => .Float128,
+            std.math.Complex(f32) => .Complex64,
+            std.math.Complex(f64) => .Complex128,
+            else => error.UnsupportedType,
+        };
+    }
+
+    pub fn toZigType(self: Self) type {
+        return switch (self) {
+            .Bool => bool,
+            .Int8 => i8,
+            .Int16 => i16,
+            .Int32 => i32,
+            .UInt64 => i64,
+            .UInt8 => u8,
+            .UInt16 => u16,
+            .UInt32 => u32,
+            .UInt64 => u64,
+            .Float32 => f32,
+            .Float64 => f64,
+            .Float128 => f128,
+            .Complex64 => std.math.Complex(f32),
+            .Complex128 => std.math.Complex(f64),
+        };
+    }
 };
 
 pub const ParseDescrError = error{
