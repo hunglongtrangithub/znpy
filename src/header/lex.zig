@@ -1,6 +1,7 @@
 const std = @import("std");
 const log = std.log.scoped(.npy_lexer);
-const HeaderEncoding = @import("../read.zig").HeaderEncoding;
+const root = @import("root.zig");
+pub const HeaderEncoding = root.HeaderEncoding;
 
 /// A literal value in the .npy header.
 pub const Literal = union(enum) {
@@ -106,7 +107,9 @@ pub const NpyHeaderLexer = struct {
                 self.position += 1;
             },
             .Utf8 => {
-                const char_len = std.unicode.utf8ByteSequenceLength(self.input[self.position]) catch return LexerError.Utf8InvalidCharacter;
+                const char_len = std.unicode.utf8ByteSequenceLength(self.input[self.position]) catch {
+                    return LexerError.Utf8InvalidCharacter;
+                };
                 self.position += char_len;
             },
         }

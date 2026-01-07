@@ -10,7 +10,15 @@ pub fn main() !void {
 
     var file_buffer: [1024]u8 = undefined;
     var file_reader = file.reader(file_buffer[0..]);
-    znpy.readNpyFile(&file_reader.interface) catch |e| {
+
+    // If header size is larger than 1024 bytes, use heap allocation
+    var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
+    const allocator = fallback.get();
+    const header = znpy.header.Header.fromReader(&file_reader.interface, allocator) catch |e| {
         std.debug.print("Error reading .npy file: {any}\n", .{e});
+        return;
     };
+    defer header.deinit(allocator);
+
+    std.debug.print("Numpy Header: {any}\n", .{header});
 }

@@ -1,6 +1,6 @@
 const std = @import("std");
 const lex = @import("lex.zig");
-const read = @import("../read.zig");
+const root = @import("root.zig");
 const log = std.log.scoped(.npy_parser);
 const Token = lex.Token;
 
@@ -33,19 +33,27 @@ const Ast = union(enum) {
 };
 
 const ParserError = error{
+    /// No input provided
     EmptyInput,
+    /// Literal found but more tokens follow
     LiteralFollowedByMoreTokens,
-    MisplacedToken,
-    InvalidKey,
+    /// Colon expected after key in map
     MissingColonAfterKey,
+    /// Comma expected after value in map
     MissingCommaAfterValue,
+    /// Key in map is not a string literal
+    InvalidKey,
+    /// Value in map is not a valid literal, tuple, or map
     InvalidValue,
+    /// Tuple element is not a number literal
     InvalidTupleElement,
+    /// Single-element tuple missing trailing comma
     MissingTrailingComma,
+    /// Unexpect token found that makes the syntax invalid
     InvalidSyntax,
 };
 
-pub const BuildError = lex.LexerError || ParserError || std.mem.Allocator.Error;
+pub const AstBuildError = lex.LexerError || ParserError || std.mem.Allocator.Error;
 
 pub const Parser = struct {
     const Self = @This();
@@ -57,7 +65,7 @@ pub const Parser = struct {
     /// Parameters:
     /// header_buffer - The buffer containing the header content.
     /// header_encoding - The encoding type of the header.
-    pub fn init(header_buffer: []const u8, header_encoding: read.HeaderEncoding) Self {
+    pub fn init(header_buffer: []const u8, header_encoding: root.HeaderEncoding) Self {
         return .{
             .lexer = lex.NpyHeaderLexer.init(header_buffer, header_encoding),
         };
@@ -65,7 +73,7 @@ pub const Parser = struct {
 
     /// Parse a map. The opening brace has already been consumed.
     /// The map keys are strings, and values can be literals, tuples, or nested maps.
-    fn parseMap(self: *Self, allocator: std.mem.Allocator) BuildError!std.StringHashMapUnmanaged(Ast) {
+    fn parseMap(self: *Self, allocator: std.mem.Allocator) AstBuildError!std.StringHashMapUnmanaged(Ast) {
         var map = std.StringHashMapUnmanaged(Ast).empty;
         errdefer map.deinit(allocator);
 
@@ -150,7 +158,7 @@ pub const Parser = struct {
 
     /// Parse a tuple. The opening parenthesis has already been consumed.
     /// The tuple can only contain number literals.
-    fn parseTuple(self: *Self, allocator: std.mem.Allocator) BuildError!std.ArrayList(usize) {
+    fn parseTuple(self: *Self, allocator: std.mem.Allocator) AstBuildError!std.ArrayList(usize) {
         var list = std.ArrayList(usize).empty;
         errdefer list.deinit(allocator);
 
@@ -221,7 +229,7 @@ pub const Parser = struct {
     }
 
     /// Parse the header content into an AST.
-    pub fn parse(self: *Self, allocator: std.mem.Allocator) BuildError!Ast {
+    pub fn parse(self: *Self, allocator: std.mem.Allocator) AstBuildError!Ast {
         const token = try self.lexer.advance();
         switch (token) {
             .EOF => return ParserError.EmptyInput,
@@ -231,7 +239,7 @@ pub const Parser = struct {
             .LParen => {
                 return .{ .Tuple = try self.parseTuple(allocator) };
             },
-            .RBrace, .RParen, .Colon, .Comma => return ParserError.MisplacedToken,
+            .RBrace, .RParen, .Colon, .Comma => return ParserError.InvalidSyntax,
             .Literal => |literal| {
                 // No more tokens should follow a literal
                 if (try self.lexer.peek() != .EOF) {
@@ -385,25 +393,25 @@ test "error on literal followed by more tokens" {
 test "error on misplaced closing brace" {
     const input = "}";
     var parser = Parser.init(input, .Ascii);
-    try std.testing.expectError(ParserError.MisplacedToken, parser.parse(std.testing.allocator));
+    try std.testing.expectError(ParserError.InvalidSyntax, parser.parse(std.testing.allocator));
 }
 
 test "error on misplaced closing paren" {
     const input = ")";
     var parser = Parser.init(input, .Ascii);
-    try std.testing.expectError(ParserError.MisplacedToken, parser.parse(std.testing.allocator));
+    try std.testing.expectError(ParserError.InvalidSyntax, parser.parse(std.testing.allocator));
 }
 
 test "error on misplaced colon" {
     const input = ":";
     var parser = Parser.init(input, .Ascii);
-    try std.testing.expectError(ParserError.MisplacedToken, parser.parse(std.testing.allocator));
+    try std.testing.expectError(ParserError.InvalidSyntax, parser.parse(std.testing.allocator));
 }
 
 test "error on misplaced comma" {
     const input = ",";
     var parser = Parser.init(input, .Ascii);
-    try std.testing.expectError(ParserError.MisplacedToken, parser.parse(std.testing.allocator));
+    try std.testing.expectError(ParserError.InvalidSyntax, parser.parse(std.testing.allocator));
 }
 
 test "error on invalid key (number)" {
