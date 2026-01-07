@@ -39,6 +39,10 @@ pub const ElementType = enum {
     Float64,
     /// 128-bit floating point - dtype code: 'f16'
     Float128,
+    /// 32-bit floating point complex number - dtype code: 'c8'
+    Complex64,
+    /// 64-bit floating point complex number - dtype code: 'c16'
+    Complex128,
 };
 
 pub const ParseDescrError = error{
@@ -145,6 +149,23 @@ pub const TypeDescriptor = struct {
                         }
                     },
                     else => return ParseDescrError.InvalidType,
+                }
+            },
+            // Complex types
+            'c' => blk: {
+                const size_slice = descr[2..];
+
+                // Endianness must not be NotApplicable
+                if (endianness == Endianness.NotApplicable) {
+                    return ParseDescrError.InvalidEndianness;
+                }
+
+                if (std.mem.eql(u8, size_slice, "8")) {
+                    break :blk .Complex64;
+                } else if (std.mem.eql(u8, size_slice, "16")) {
+                    break :blk .Complex128;
+                } else {
+                    return ParseDescrError.InvalidType;
                 }
             },
             else => return ParseDescrError.InvalidType,
@@ -260,6 +281,26 @@ test "parse floating point dtypes" {
     try std.testing.expectEqual(ElementType.Float128, f128_big.element_type);
 }
 
+test "parse complex dtypes" {
+    // Complex64 (<c8, >c8)
+    const c64_little = try TypeDescriptor.fromString("<c8");
+    try std.testing.expectEqual(Endianness.Little, c64_little.endian);
+    try std.testing.expectEqual(ElementType.Complex64, c64_little.element_type);
+
+    const c64_big = try TypeDescriptor.fromString(">c8");
+    try std.testing.expectEqual(Endianness.Big, c64_big.endian);
+    try std.testing.expectEqual(ElementType.Complex64, c64_big.element_type);
+
+    // Complex128 (<c16, >c16)
+    const c128_little = try TypeDescriptor.fromString("<c16");
+    try std.testing.expectEqual(Endianness.Little, c128_little.endian);
+    try std.testing.expectEqual(ElementType.Complex128, c128_little.element_type);
+
+    const c128_big = try TypeDescriptor.fromString(">c16");
+    try std.testing.expectEqual(Endianness.Big, c128_big.endian);
+    try std.testing.expectEqual(ElementType.Complex128, c128_big.element_type);
+}
+
 test "parse with native endianness" {
     const i32_native = try TypeDescriptor.fromString("=i4");
     try std.testing.expectEqual(Endianness.Native, i32_native.endian);
@@ -309,38 +350,43 @@ test "error on invalid endianness for floats" {
 }
 
 test "error on invalid bool size" {
-    try std.testing.expectError(ParseDescrError.InvalidValue, TypeDescriptor.fromString("|b2"));
-    try std.testing.expectError(ParseDescrError.InvalidValue, TypeDescriptor.fromString("|b4"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("|b2"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("|b4"));
     try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("|b"));
 }
 
 test "error on unsupported integer sizes" {
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString("<i3"));
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString(">u5"));
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString("=i16"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("<i3"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">u5"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("=i16"));
 }
 
 test "error on unsupported float sizes" {
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString("<f2"));
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString(">f12"));
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString("=f32"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("<f2"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">f12"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("=f32"));
 }
 
 test "error on unsupported type characters" {
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString("<c8"));
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString(">S10"));
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString("=U5"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">S10"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("=U5"));
     try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("|O"));
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString("<M8"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("<M8"));
 }
 
 test "error on invalid integer descr length" {
     try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("<i"));
     try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString(">u"));
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString("<i44"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("<i44"));
 }
 
 test "error on invalid float descr length" {
     try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("<f"));
-    try std.testing.expectError(ParseDescrError.UnsupportedType, TypeDescriptor.fromString(">f123"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">f123"));
+}
+
+test "error on invalid complex descr length" {
+    try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("<c"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">c24"));
+    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">c32"));
 }
