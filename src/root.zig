@@ -4,5 +4,5 @@ pub const header = @import("header/root.zig");
 
 test {
     // Make all tests in other files imported by this module available during testing
-    std.testing.refAllDecls(@This());
+    std.testing.refAllDeclsRecursive(@This());
 }
