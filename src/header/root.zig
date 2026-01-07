@@ -37,17 +37,27 @@ const log = std.log.scoped(.npy_header);
 const parse = @import("parse.zig");
 const descr = @import("descr.zig");
 
-pub const Endianness = descr.Endianness;
-pub const ElementType = descr.ElementType;
 pub const TypeDescriptor = descr.TypeDescriptor;
 
-pub const HeaderEncoding = enum {
+/// Specifies how array data is laid out in memory
+const Order = enum {
+    /// Array data is in row-major order (C-contiguous)
+    C,
+    /// Array data is in column-major order (Fortran-contiguous)
+    F,
+};
+
+const HeaderEncoding = enum {
+    /// Header data is in ASCII
     Ascii,
+    /// Header data is in UTF-8
     Utf8,
 };
 
 const HeaderSizeType = enum {
+    /// Header size is an unsigned short (`u16`)
     U16,
+    /// Header size is an unsigned int (`u32`)
     U32,
 };
 
@@ -95,7 +105,7 @@ pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error;
 pub const Header = struct {
     shape: []usize,
     descr: TypeDescriptor,
-    fortran_order: bool,
+    order: Order,
 
     const Self = @This();
 
@@ -181,7 +191,7 @@ pub const Header = struct {
 
         var header_data = Header{
             .descr = undefined,
-            .fortran_order = undefined,
+            .order = undefined,
             .shape = undefined,
         };
 
@@ -204,7 +214,7 @@ pub const Header = struct {
                 const fortran_order_ast = map.get("fortran_order") orelse return ParseHeaderError.ExpectedKeyFortranOrder;
                 switch (fortran_order_ast) {
                     .Literal => |lit| switch (lit) {
-                        .Boolean => |b| header_data.fortran_order = b,
+                        .Boolean => |b| header_data.order = if (b) Order.F else Order.C,
                         else => return ParseHeaderError.InvalidValueFortranOrder,
                     },
                     else => return ParseHeaderError.InvalidValueFortranOrder,
