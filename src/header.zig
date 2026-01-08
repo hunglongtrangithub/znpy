@@ -43,7 +43,7 @@ const log = std.log.scoped(.npy_header);
 pub const ElementType = descr.ElementType;
 
 /// Specifies how array data is laid out in memory
-const Order = enum {
+pub const Order = enum {
     /// Array data is in row-major order (C-contiguous)
     C,
     /// Array data is in column-major order (Fortran-contiguous)
@@ -261,7 +261,6 @@ pub const Header = struct {
         // Now read the header content
         const header_buffer = try allocator.alloc(u8, header_size);
         defer allocator.free(header_buffer);
-        errdefer allocator.free(header_buffer);
 
         reader.readSliceAll(header_buffer) catch {
             return ParseHeaderError.IoError;
@@ -284,7 +283,6 @@ pub const Header = struct {
             return ParseHeaderError.InvalidHeaderFormat;
         };
         defer ast.deinit(allocator);
-        errdefer ast.deinit(allocator);
 
         var header_data = Header{
             .descr = undefined,

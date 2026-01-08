@@ -111,14 +111,12 @@ test "isAllZeroOrOne - boundary case around vector size" {
     // Exactly vector_size elements, all valid
     const exact = try testing.allocator.alloc(u8, vector_size);
     defer testing.allocator.free(exact);
-    errdefer testing.allocator.free(exact);
     @memset(exact, 1);
     try testing.expect(isAllZeroOrOne(exact));
 
     // Exactly vector_size + 1 elements with bad byte in tail
     var plus_one = try testing.allocator.alloc(u8, vector_size + 1);
     defer testing.allocator.free(plus_one);
-    errdefer testing.allocator.free(plus_one);
     @memset(plus_one, 0);
     plus_one[vector_size] = 2;
     try testing.expect(!isAllZeroOrOne(plus_one));
@@ -127,7 +125,6 @@ test "isAllZeroOrOne - boundary case around vector size" {
     if (vector_size > 1) {
         var minus_one = try testing.allocator.alloc(u8, vector_size - 1);
         defer testing.allocator.free(minus_one);
-        errdefer testing.allocator.free(minus_one);
         @memset(minus_one, 1);
         minus_one[vector_size - 2] = 8;
         try testing.expect(!isAllZeroOrOne(minus_one));
