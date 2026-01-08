@@ -40,19 +40,20 @@ fn processNpyFile(file: std.fs.File) !void {
     const data_buffer = file_buffer[slice_reader.pos..];
     std.debug.print("Data buffer length: {}\n", .{data_buffer.len});
 
-    const total_elementss = znpy.dimension.shapeSizeChecked(header.descr, header.shape) orelse {
+    const total_elements = znpy.dimension.shapeSizeChecked(header.descr, header.shape) orelse {
         std.debug.print("Array size overflowed\n", .{});
         return;
     };
+    std.debug.print("Array shape: {any}\n", .{header.shape});
     std.debug.print("Element's type descriptor: {any}\n", .{header.descr});
-    std.debug.print("Total number of elements: {}\n", .{total_elementss});
+    std.debug.print("Total number of elements: {}\n", .{total_elements});
 
     std.debug.assert(header.descr == .Float64);
-    std.debug.assert(data_buffer.len == total_elementss * header.descr.byteSize());
+    std.debug.assert(data_buffer.len == total_elements * header.descr.byteSize());
 
     const float64_slice = znpy.Element(f64).bytesAsSlice(
         data_buffer,
-        total_elementss,
+        total_elements,
         header.descr,
     ) catch |e| {
         std.debug.print("Error interpreting data buffer as f64 slice: {}\n", .{e});
@@ -65,6 +66,7 @@ fn processNpyFile(file: std.fs.File) !void {
 }
 
 pub fn main() !void {
+    // const npy_file_path = "test-data/empty/empty_0d.npy";
     const npy_file_path = "test.npy";
     const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
         std.debug.print("Failed to open file: {}\n", .{e});

@@ -137,7 +137,8 @@ pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error;
 /// Represents the parsed header information from a .npy file.
 pub const Header = struct {
     /// The shape of the array, extracted from the 'shape' key.
-    shape: []usize,
+    /// Shape is empty for scalars (0-dimensional arrays).
+    shape: []const usize,
     /// The element type descriptor, extracted from the 'descr' key.
     descr: ElementType,
     /// The array order, extracted from the 'fortran_order' key.

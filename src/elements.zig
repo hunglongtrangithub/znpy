@@ -100,12 +100,12 @@ pub fn Element(comptime T: type) type {
             return std.mem.bytesAsSlice(T, aligned_bytes);
         }
 
-        pub fn writeSlice(slice: []const Self, writer: std.io.Writer) WriteDataError!void {
+        pub fn writeSlice(slice: []const T, writer: std.io.Writer) WriteDataError!void {
             _ = slice;
             _ = writer;
         }
 
-        pub fn readSlice(slice: []Self, reader: *std.io.Reader, type_descr: header.TypeDescriptor) ReadDataError!void {
+        pub fn readSlice(slice: []T, reader: *std.io.Reader, type_descr: header.TypeDescriptor) ReadDataError!void {
             _ = slice;
             _ = reader;
             _ = type_descr;
