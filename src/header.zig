@@ -67,7 +67,7 @@ const VersionProps = struct {
 };
 
 const ParseHeaderError = error{
-    /// Error reading from file, due to I/O issues.
+    /// Error reading from file, due to I/O issues (unexpected end-of-file/sequence or read failure).
     IoError,
     /// Magic sequence does not match the expected value.
     MagicMismatch,
@@ -133,8 +133,11 @@ pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error;
 
 /// Represents the parsed header information from a .npy file.
 pub const Header = struct {
+    /// The shape of the array, extracted from the 'shape' key.
     shape: []usize,
+    /// The element type descriptor, extracted from the 'descr' key.
     descr: ElementType,
+    /// The array order, extracted from the 'fortran_order' key.
     order: Order,
 
     const Self = @This();

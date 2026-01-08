@@ -6,7 +6,7 @@ pub const elements = @import("elements.zig");
 pub const ElementType = header.ElementType;
 pub const Element = elements.Element;
 
-/// The number of bytes an array takes, given its shape and element type, must not exceed `std.math.maxInt(usize)`
+/// The number of bytes an array takes, given its shape and element type, must not exceed `std.math.maxInt(isize)`
 /// Returns the number of elements in the array on success, or `null` if overflow occurs.
 pub fn shapeSizeChecked(T: ElementType, shape: []usize) ?usize {
     const isize_max = std.math.maxInt(isize);
