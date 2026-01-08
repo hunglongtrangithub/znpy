@@ -1,6 +1,9 @@
 const std = @import("std");
-const log = std.log.scoped(.npy_lexer);
+
 const header = @import("../header.zig");
+
+const log = std.log.scoped(.npy_lexer);
+
 pub const HeaderEncoding = header.HeaderEncoding;
 
 /// A literal value in the .npy header.

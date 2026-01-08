@@ -1,12 +1,18 @@
 //! Module for array element functions and types.
 const std = @import("std");
-const header = @import("header.zig");
 const builtin = @import("builtin");
+
+const header = @import("header.zig");
+
+const boolean = @import("elements/boolean.zig");
+
 const native_endian = builtin.cpu.arch.endian();
 
 const ViewDataError = error{
     /// The provided element type does not match the expected type.
     TypeMismatch,
+    /// The provided data contains invalid boolean values (not 0 or 1).
+    InvalidBool,
     /// The endianness of the provided data does not match the native endianness.
     EndiannessMismatch,
     /// The requested length causes an overflow when calculating the total byte size.
@@ -31,26 +37,34 @@ pub fn Element(comptime T: type) type {
 
         const Self = @This();
 
+        /// Interprets a byte slice as a slice of the specified element type `T`.
         pub fn bytesAsSlice(bytes: []const u8, len: usize, type_descr: header.ElementType) ViewDataError![]const T {
             // Element types must match
             if (std.meta.activeTag(type_descr) != std.meta.activeTag(element_type)) {
                 return ViewDataError.TypeMismatch;
             }
 
-            // Endianness must match native endianness for multi-byte types
             switch (type_descr) {
-                .Bool, .Int8, .UInt8 => {},
+                .Bool => {
+                    // All bytes have to be either 0 or 1
+                    if (!boolean.isAllZeroOrOne(bytes)) {
+                        return ViewDataError.InvalidBool;
+                    }
+                },
+                .Int8, .UInt8 => {},
                 .Int16, .Int32, .Int64, .UInt16, .UInt32, .UInt64, .Float32, .Float64, .Float128, .Complex64, .Complex128 => |endian| {
+                    // Endianness must match native endianness for multi-byte types
                     if (endian) |e| {
                         if (e != native_endian) {
                             return ViewDataError.EndiannessMismatch;
                         }
                     }
+                    // endian is null -> assume native endian
                 },
             }
 
             // Get the number of bytes. Check for overflow
-            const num_bytes, const overflow = @mulWithOverflow(len, @sizeOf(T));
+            const num_bytes: usize, const overflow: u1 = @mulWithOverflow(len, @sizeOf(T));
             if (overflow != 0) {
                 return ViewDataError.LengthOverflow;
             }
@@ -96,4 +110,8 @@ pub fn Element(comptime T: type) type {
             _ = type_descr;
         }
     };
+}
+
+test {
+    _ = boolean;
 }

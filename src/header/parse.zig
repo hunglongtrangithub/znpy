@@ -1,6 +1,8 @@
 const std = @import("std");
+
 const lex = @import("lex.zig");
 const header = @import("../header.zig");
+
 const log = std.log.scoped(.npy_parser);
 const Token = lex.Token;
 

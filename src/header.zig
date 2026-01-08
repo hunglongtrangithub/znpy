@@ -33,9 +33,12 @@
 //! {'descr': '<f8', 'fortran_order': False, 'shape': (3, 4)}
 //! ```
 const std = @import("std");
-const log = std.log.scoped(.npy_header);
+
 const parse = @import("header/parse.zig");
 const descr = @import("header/descr.zig");
+const lex = @import("header/lex.zig");
+
+const log = std.log.scoped(.npy_header);
 
 pub const ElementType = descr.ElementType;
 
@@ -336,3 +339,9 @@ pub const Header = struct {
         allocator.free(self.shape);
     }
 };
+
+test {
+    _ = parse;
+    _ = descr;
+    _ = lex;
+}
