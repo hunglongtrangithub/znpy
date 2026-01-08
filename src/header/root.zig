@@ -37,7 +37,7 @@ const log = std.log.scoped(.npy_header);
 const parse = @import("parse.zig");
 const descr = @import("descr.zig");
 
-pub const TypeDescriptor = descr.TypeDescriptor;
+pub const ElementType = descr.ElementType;
 
 /// Specifies how array data is laid out in memory
 const Order = enum {
@@ -47,7 +47,7 @@ const Order = enum {
     F,
 };
 
-const HeaderEncoding = enum {
+pub const HeaderEncoding = enum {
     /// Header data is in ASCII
     Ascii,
     /// Header data is in UTF-8
@@ -104,7 +104,7 @@ pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error;
 /// Represents the parsed header information from a .npy file.
 pub const Header = struct {
     shape: []usize,
-    descr: TypeDescriptor,
+    descr: ElementType,
     order: Order,
 
     const Self = @This();
@@ -202,7 +202,7 @@ pub const Header = struct {
                 const descr_ast = map.get("descr") orelse return ParseHeaderError.ExpectedKeyDescr;
                 switch (descr_ast) {
                     .Literal => |lit| switch (lit) {
-                        .String => |s| header_data.descr = TypeDescriptor.fromString(s) catch {
+                        .String => |s| header_data.descr = ElementType.fromString(s) catch {
                             return ParseHeaderError.InvalidValueDescr;
                         },
                         else => return ParseHeaderError.InvalidValueDescr,

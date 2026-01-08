@@ -1,92 +1,6 @@
 const std = @import("std");
-
-/// Endianness of the data stored in the .npy file.
-pub const Endianness = enum {
-    /// Little-endian byte order (e.g., '<f8')
-    Little,
-    /// Big-endian byte order (e.g., '>f8')
-    Big,
-    /// Native byte order (e.g., '=f8')
-    Native,
-    /// Not applicable
-    NotApplicable,
-};
-
-/// Element type of the array data.
-/// Maps to NumPy dtype codes.
-pub const ElementType = enum {
-    /// Boolean type - dtype codes: 'b1'
-    Bool,
-    /// 8-bit signed integer - dtype code: 'i1'
-    Int8,
-    /// 16-bit signed integer - dtype code: 'i2'
-    Int16,
-    /// 32-bit signed integer - dtype code: 'i4'
-    Int32,
-    /// 64-bit signed integer - dtype code: 'i8'
-    Int64,
-    /// 8-bit unsigned integer - dtype code: 'u1'
-    UInt8,
-    /// 16-bit unsigned integer - dtype code: 'u2'
-    UInt16,
-    /// 32-bit unsigned integer - dtype code: 'u4'
-    UInt32,
-    /// 64-bit unsigned integer - dtype code: 'u8'
-    UInt64,
-    /// 32-bit floating point - dtype code: 'f4'
-    Float32,
-    /// 64-bit floating point - dtype code: 'f8'
-    Float64,
-    /// 128-bit floating point - dtype code: 'f16'
-    Float128,
-    /// 32-bit floating point complex number - dtype code: 'c8'
-    Complex64,
-    /// 64-bit floating point complex number - dtype code: 'c16'
-    Complex128,
-
-    const Self = @This();
-
-    pub const FromZigTypeError = error{UnsupportedType};
-
-    pub fn fromZigType(t: type) FromZigTypeError!Self {
-        return switch (t) {
-            bool => .Bool,
-            i8 => .Int8,
-            i16 => .Int16,
-            i32 => .Int32,
-            i64 => .Int64,
-            u8 => .UInt8,
-            u16 => .UInt16,
-            u32 => .UInt32,
-            u64 => .UInt64,
-            f32 => .Float32,
-            f64 => .Float64,
-            f128 => .Float128,
-            std.math.Complex(f32) => .Complex64,
-            std.math.Complex(f64) => .Complex128,
-            else => error.UnsupportedType,
-        };
-    }
-
-    pub fn toZigType(self: Self) type {
-        return switch (self) {
-            .Bool => bool,
-            .Int8 => i8,
-            .Int16 => i16,
-            .Int32 => i32,
-            .UInt64 => i64,
-            .UInt8 => u8,
-            .UInt16 => u16,
-            .UInt32 => u32,
-            .UInt64 => u64,
-            .Float32 => f32,
-            .Float64 => f64,
-            .Float128 => f128,
-            .Complex64 => std.math.Complex(f32),
-            .Complex128 => std.math.Complex(f64),
-        };
-    }
-};
+const builtin = @import("builtin");
+const Endian = std.builtin.Endian;
 
 pub const ParseDescrError = error{
     /// Descriptor string is too short to be valid.
@@ -99,13 +13,107 @@ pub const ParseDescrError = error{
     InvalidType,
 };
 
-/// Type descriptor parsed from the 'descr' field in a .npy file header.
-pub const TypeDescriptor = struct {
-    endian: Endianness,
-    element_type: ElementType,
+/// Element type of the array data, parsed from the `descr` field in the npy file header.
+/// Maps to NumPy dtype codes.
+/// For multi-byte types, endianness can be specified. If endianness is null,
+/// it indicates native endianness.
+pub const ElementType = union(enum) {
+    /// Boolean type - dtype codes: 'b1'
+    Bool,
+    /// 8-bit signed integer - dtype code: 'i1'
+    Int8,
+    /// 16-bit signed integer - dtype code: 'i2'
+    Int16: ?Endian,
+    /// 32-bit signed integer - dtype code: 'i4'
+    Int32: ?Endian,
+    /// 64-bit signed integer - dtype code: 'i8'
+    Int64: ?Endian,
+    /// 8-bit unsigned integer - dtype code: 'u1'
+    UInt8,
+    /// 16-bit unsigned integer - dtype code: 'u2'
+    UInt16: ?Endian,
+    /// 32-bit unsigned integer - dtype code: 'u4'
+    UInt32: ?Endian,
+    /// 64-bit unsigned integer - dtype code: 'u8'
+    UInt64: ?Endian,
+    /// 32-bit floating point - dtype code: 'f4'
+    Float32: ?Endian,
+    /// 64-bit floating point - dtype code: 'f8'
+    Float64: ?Endian,
+    /// 128-bit floating point - dtype code: 'f16'
+    Float128: ?Endian,
+    /// 32-bit floating point complex number - dtype code: 'c8'
+    Complex64: ?Endian,
+    /// 64-bit floating point complex number - dtype code: 'c16'
+    Complex128: ?Endian,
 
     const Self = @This();
 
+    pub const FromZigTypeError = error{UnsupportedType};
+
+    /// Converts a Zig type to the corresponding ElementType, with endianness set to null (native).
+    pub fn fromZigType(t: type) FromZigTypeError!Self {
+        return switch (t) {
+            bool => .Bool,
+            i8 => .Int8,
+            i16 => .{ .Int16 = null },
+            i32 => .{ .Int32 = null },
+            i64 => .{ .Int64 = null },
+            u8 => .UInt8,
+            u16 => .{ .UInt16 = null },
+            u32 => .{ .UInt32 = null },
+            u64 => .{ .UInt64 = null },
+            f32 => .{ .Float32 = null },
+            f64 => .{ .Float64 = null },
+            f128 => .{ .Float128 = null },
+            std.math.Complex(f32) => .{ .Complex64 = null },
+            std.math.Complex(f64) => .{ .Complex128 = null },
+            else => error.UnsupportedType,
+        };
+    }
+
+    /// Converts the ElementType to the corresponding Zig type.
+    pub fn toZigType(self: Self) type {
+        return switch (self) {
+            .Bool => bool,
+            .Int8 => i8,
+            .Int16 => i16,
+            .Int32 => i32,
+            .Int64 => i64,
+            .UInt8 => u8,
+            .UInt16 => u16,
+            .UInt32 => u32,
+            .UInt64 => u64,
+            .Float32 => f32,
+            .Float64 => f64,
+            .Float128 => f128,
+            .Complex64 => std.math.Complex(f32),
+            .Complex128 => std.math.Complex(f64),
+        };
+    }
+
+    /// Returns the size in bytes of the ElementType.
+    pub fn byteSize(self: Self) usize {
+        return switch (self) {
+            .Bool => @sizeOf(bool),
+            .Int8 => @sizeOf(i8),
+            .UInt8 => @sizeOf(u8),
+            .Int16 => @sizeOf(i16),
+            .UInt16 => @sizeOf(u16),
+            .Int32 => @sizeOf(i32),
+            .UInt32 => @sizeOf(u32),
+            .Int64 => @sizeOf(i64),
+            .UInt64 => @sizeOf(u64),
+            .Float32 => @sizeOf(f32),
+            .Float64 => @sizeOf(f64),
+            .Float128 => @sizeOf(f128),
+            .Complex64 => @sizeOf(std.math.Complex(f32)),
+            .Complex128 => @sizeOf(std.math.Complex(f64)),
+        };
+    }
+
+    /// Parses the `descr` string the Python dictionary in npy file's header into a `ElementType`.
+    /// All multi-byte types must have endianness specified.
     pub fn fromString(descr: []const u8) ParseDescrError!Self {
         if (descr.len < 3) {
             return ParseDescrError.TooShort;
@@ -114,10 +122,15 @@ pub const TypeDescriptor = struct {
         const endian_char = descr[0];
         const type_char = descr[1];
 
-        const endianness: Endianness = switch (endian_char) {
-            '<' => .Little,
-            '>' => .Big,
-            '=' => .Native,
+        const EndianOrNA = union(enum) {
+            Applicable: ?Endian,
+            NotApplicable,
+        };
+
+        const endianness: EndianOrNA = switch (endian_char) {
+            '<' => .{ .Applicable = .little },
+            '>' => .{ .Applicable = .big },
+            '=' => .{ .Applicable = null },
             '|' => .NotApplicable,
             else => return ParseDescrError.InvalidEndianness,
         };
@@ -126,7 +139,7 @@ pub const TypeDescriptor = struct {
             // Boolean type
             'b' => blk: {
                 // Endianness must be NotApplicable
-                if (endianness != Endianness.NotApplicable) {
+                if (endianness != EndianOrNA.NotApplicable) {
                     return ParseDescrError.InvalidEndianness;
                 }
                 // Descr must be '|b1'
@@ -145,24 +158,24 @@ pub const TypeDescriptor = struct {
                 const size_char = size_slice[0];
 
                 // Endianness must not be NotApplicable if size is not 1, and vice versa
-                if ((size_char == '1') != (endianness == Endianness.NotApplicable)) {
+                if ((size_char == '1') != (endianness == EndianOrNA.NotApplicable)) {
                     return ParseDescrError.InvalidEndianness;
                 }
 
                 if (type_char == 'i') {
                     switch (size_char) {
                         '1' => break :blk .Int8,
-                        '2' => break :blk .Int16,
-                        '4' => break :blk .Int32,
-                        '8' => break :blk .Int64,
+                        '2' => break :blk .{ .Int16 = endianness.Applicable },
+                        '4' => break :blk .{ .Int32 = endianness.Applicable },
+                        '8' => break :blk .{ .Int64 = endianness.Applicable },
                         else => return ParseDescrError.InvalidType,
                     }
                 } else { // type_char == 'u'
                     switch (size_char) {
                         '1' => break :blk .UInt8,
-                        '2' => break :blk .UInt16,
-                        '4' => break :blk .UInt32,
-                        '8' => break :blk .UInt64,
+                        '2' => break :blk .{ .UInt16 = endianness.Applicable },
+                        '4' => break :blk .{ .UInt32 = endianness.Applicable },
+                        '8' => break :blk .{ .UInt64 = endianness.Applicable },
                         else => return ParseDescrError.InvalidType,
                     }
                 }
@@ -172,21 +185,21 @@ pub const TypeDescriptor = struct {
                 const size_slice = descr[2..];
 
                 // Endianness must not be NotApplicable
-                if (endianness == Endianness.NotApplicable) {
+                if (endianness == EndianOrNA.NotApplicable) {
                     return ParseDescrError.InvalidEndianness;
                 }
 
                 switch (size_slice.len) {
                     1 => {
                         switch (size_slice[0]) {
-                            '4' => break :blk .Float32,
-                            '8' => break :blk .Float64,
+                            '4' => break :blk .{ .Float32 = endianness.Applicable },
+                            '8' => break :blk .{ .Float64 = endianness.Applicable },
                             else => return ParseDescrError.InvalidType,
                         }
                     },
                     2 => {
                         if (std.mem.eql(u8, size_slice, "16")) {
-                            break :blk .Float128;
+                            break :blk .{ .Float128 = endianness.Applicable };
                         } else {
                             return ParseDescrError.InvalidType;
                         }
@@ -199,14 +212,14 @@ pub const TypeDescriptor = struct {
                 const size_slice = descr[2..];
 
                 // Endianness must not be NotApplicable
-                if (endianness == Endianness.NotApplicable) {
+                if (endianness == EndianOrNA.NotApplicable) {
                     return ParseDescrError.InvalidEndianness;
                 }
 
                 if (std.mem.eql(u8, size_slice, "8")) {
-                    break :blk .Complex64;
+                    break :blk .{ .Complex64 = endianness.Applicable };
                 } else if (std.mem.eql(u8, size_slice, "16")) {
-                    break :blk .Complex128;
+                    break :blk .{ .Complex128 = endianness.Applicable };
                 } else {
                     return ParseDescrError.InvalidType;
                 }
@@ -214,222 +227,191 @@ pub const TypeDescriptor = struct {
             else => return ParseDescrError.InvalidType,
         };
 
-        return TypeDescriptor{
-            .endian = endianness,
-            .element_type = element_type,
-        };
+        return element_type;
     }
 };
 
 test "parse bool dtype" {
-    const result = try TypeDescriptor.fromString("|b1");
-    try std.testing.expectEqual(Endianness.NotApplicable, result.endian);
-    try std.testing.expectEqual(ElementType.Bool, result.element_type);
+    const result = try ElementType.fromString("|b1");
+    try std.testing.expectEqual(ElementType.Bool, result);
 }
 
 test "parse signed integer dtypes" {
     // Int8 (|i1)
-    const i8_result = try TypeDescriptor.fromString("|i1");
-    try std.testing.expectEqual(Endianness.NotApplicable, i8_result.endian);
-    try std.testing.expectEqual(ElementType.Int8, i8_result.element_type);
+    const i8_result = try ElementType.fromString("|i1");
+    try std.testing.expectEqual(ElementType.Int8, i8_result);
 
     // Int16 (<i2, >i2)
-    const i16_little = try TypeDescriptor.fromString("<i2");
-    try std.testing.expectEqual(Endianness.Little, i16_little.endian);
-    try std.testing.expectEqual(ElementType.Int16, i16_little.element_type);
+    const i16_little = try ElementType.fromString("<i2");
+    try std.testing.expectEqual(Endian.little, i16_little.Int16.?);
 
-    const i16_big = try TypeDescriptor.fromString(">i2");
-    try std.testing.expectEqual(Endianness.Big, i16_big.endian);
-    try std.testing.expectEqual(ElementType.Int16, i16_big.element_type);
+    const i16_big = try ElementType.fromString(">i2");
+    try std.testing.expectEqual(Endian.big, i16_big.Int16.?);
 
     // Int32 (<i4, >i4)
-    const i32_little = try TypeDescriptor.fromString("<i4");
-    try std.testing.expectEqual(Endianness.Little, i32_little.endian);
-    try std.testing.expectEqual(ElementType.Int32, i32_little.element_type);
+    const i32_little = try ElementType.fromString("<i4");
+    try std.testing.expectEqual(Endian.little, i32_little.Int32.?);
 
-    const i32_big = try TypeDescriptor.fromString(">i4");
-    try std.testing.expectEqual(Endianness.Big, i32_big.endian);
-    try std.testing.expectEqual(ElementType.Int32, i32_big.element_type);
+    const i32_big = try ElementType.fromString(">i4");
+    try std.testing.expectEqual(Endian.big, i32_big.Int32.?);
 
     // Int64 (<i8, >i8)
-    const i64_little = try TypeDescriptor.fromString("<i8");
-    try std.testing.expectEqual(Endianness.Little, i64_little.endian);
-    try std.testing.expectEqual(ElementType.Int64, i64_little.element_type);
+    const i64_little = try ElementType.fromString("<i8");
+    try std.testing.expectEqual(Endian.little, i64_little.Int64.?);
 
-    const i64_big = try TypeDescriptor.fromString(">i8");
-    try std.testing.expectEqual(Endianness.Big, i64_big.endian);
-    try std.testing.expectEqual(ElementType.Int64, i64_big.element_type);
+    const i64_big = try ElementType.fromString(">i8");
+    try std.testing.expectEqual(Endian.big, i64_big.Int64.?);
 }
 
 test "parse unsigned integer dtypes" {
     // UInt8 (|u1)
-    const u8_result = try TypeDescriptor.fromString("|u1");
-    try std.testing.expectEqual(Endianness.NotApplicable, u8_result.endian);
-    try std.testing.expectEqual(ElementType.UInt8, u8_result.element_type);
+    const u8_result = try ElementType.fromString("|u1");
+    try std.testing.expectEqual(ElementType.UInt8, u8_result);
 
     // UInt16 (<u2, >u2)
-    const u16_little = try TypeDescriptor.fromString("<u2");
-    try std.testing.expectEqual(Endianness.Little, u16_little.endian);
-    try std.testing.expectEqual(ElementType.UInt16, u16_little.element_type);
+    const u16_little = try ElementType.fromString("<u2");
+    try std.testing.expectEqual(Endian.little, u16_little.UInt16.?);
 
-    const u16_big = try TypeDescriptor.fromString(">u2");
-    try std.testing.expectEqual(Endianness.Big, u16_big.endian);
-    try std.testing.expectEqual(ElementType.UInt16, u16_big.element_type);
+    const u16_big = try ElementType.fromString(">u2");
+    try std.testing.expectEqual(Endian.big, u16_big.UInt16.?);
 
     // UInt32 (<u4, >u4)
-    const u32_little = try TypeDescriptor.fromString("<u4");
-    try std.testing.expectEqual(Endianness.Little, u32_little.endian);
-    try std.testing.expectEqual(ElementType.UInt32, u32_little.element_type);
+    const u32_little = try ElementType.fromString("<u4");
+    try std.testing.expectEqual(Endian.little, u32_little.UInt32.?);
 
-    const u32_big = try TypeDescriptor.fromString(">u4");
-    try std.testing.expectEqual(Endianness.Big, u32_big.endian);
-    try std.testing.expectEqual(ElementType.UInt32, u32_big.element_type);
+    const u32_big = try ElementType.fromString(">u4");
+    try std.testing.expectEqual(Endian.big, u32_big.UInt32.?);
 
     // UInt64 (<u8, >u8)
-    const u64_little = try TypeDescriptor.fromString("<u8");
-    try std.testing.expectEqual(Endianness.Little, u64_little.endian);
-    try std.testing.expectEqual(ElementType.UInt64, u64_little.element_type);
+    const u64_little = try ElementType.fromString("<u8");
+    try std.testing.expectEqual(Endian.little, u64_little.UInt64.?);
 
-    const u64_big = try TypeDescriptor.fromString(">u8");
-    try std.testing.expectEqual(Endianness.Big, u64_big.endian);
-    try std.testing.expectEqual(ElementType.UInt64, u64_big.element_type);
+    const u64_big = try ElementType.fromString(">u8");
+    try std.testing.expectEqual(Endian.big, u64_big.UInt64.?);
 }
 
 test "parse floating point dtypes" {
     // Float32 (<f4, >f4)
-    const f32_little = try TypeDescriptor.fromString("<f4");
-    try std.testing.expectEqual(Endianness.Little, f32_little.endian);
-    try std.testing.expectEqual(ElementType.Float32, f32_little.element_type);
+    const f32_little = try ElementType.fromString("<f4");
+    try std.testing.expectEqual(Endian.little, f32_little.Float32.?);
 
-    const f32_big = try TypeDescriptor.fromString(">f4");
-    try std.testing.expectEqual(Endianness.Big, f32_big.endian);
-    try std.testing.expectEqual(ElementType.Float32, f32_big.element_type);
+    const f32_big = try ElementType.fromString(">f4");
+    try std.testing.expectEqual(Endian.big, f32_big.Float32.?);
 
     // Float64 (<f8, >f8)
-    const f64_little = try TypeDescriptor.fromString("<f8");
-    try std.testing.expectEqual(Endianness.Little, f64_little.endian);
-    try std.testing.expectEqual(ElementType.Float64, f64_little.element_type);
+    const f64_little = try ElementType.fromString("<f8");
+    try std.testing.expectEqual(Endian.little, f64_little.Float64.?);
 
-    const f64_big = try TypeDescriptor.fromString(">f8");
-    try std.testing.expectEqual(Endianness.Big, f64_big.endian);
-    try std.testing.expectEqual(ElementType.Float64, f64_big.element_type);
+    const f64_big = try ElementType.fromString(">f8");
+    try std.testing.expectEqual(Endian.big, f64_big.Float64.?);
 
     // Float128 (<f16, >f16)
-    const f128_little = try TypeDescriptor.fromString("<f16");
-    try std.testing.expectEqual(Endianness.Little, f128_little.endian);
-    try std.testing.expectEqual(ElementType.Float128, f128_little.element_type);
+    const f128_little = try ElementType.fromString("<f16");
+    try std.testing.expectEqual(Endian.little, f128_little.Float128.?);
 
-    const f128_big = try TypeDescriptor.fromString(">f16");
-    try std.testing.expectEqual(Endianness.Big, f128_big.endian);
-    try std.testing.expectEqual(ElementType.Float128, f128_big.element_type);
+    const f128_big = try ElementType.fromString(">f16");
+    try std.testing.expectEqual(Endian.big, f128_big.Float128.?);
 }
 
 test "parse complex dtypes" {
     // Complex64 (<c8, >c8)
-    const c64_little = try TypeDescriptor.fromString("<c8");
-    try std.testing.expectEqual(Endianness.Little, c64_little.endian);
-    try std.testing.expectEqual(ElementType.Complex64, c64_little.element_type);
+    const c64_little = try ElementType.fromString("<c8");
+    try std.testing.expectEqual(Endian.little, c64_little.Complex64.?);
 
-    const c64_big = try TypeDescriptor.fromString(">c8");
-    try std.testing.expectEqual(Endianness.Big, c64_big.endian);
-    try std.testing.expectEqual(ElementType.Complex64, c64_big.element_type);
+    const c64_big = try ElementType.fromString(">c8");
+    try std.testing.expectEqual(Endian.big, c64_big.Complex64.?);
 
     // Complex128 (<c16, >c16)
-    const c128_little = try TypeDescriptor.fromString("<c16");
-    try std.testing.expectEqual(Endianness.Little, c128_little.endian);
-    try std.testing.expectEqual(ElementType.Complex128, c128_little.element_type);
+    const c128_little = try ElementType.fromString("<c16");
+    try std.testing.expectEqual(Endian.little, c128_little.Complex128.?);
 
-    const c128_big = try TypeDescriptor.fromString(">c16");
-    try std.testing.expectEqual(Endianness.Big, c128_big.endian);
-    try std.testing.expectEqual(ElementType.Complex128, c128_big.element_type);
+    const c128_big = try ElementType.fromString(">c16");
+    try std.testing.expectEqual(Endian.big, c128_big.Complex128.?);
 }
 
 test "parse with native endianness" {
-    const i32_native = try TypeDescriptor.fromString("=i4");
-    try std.testing.expectEqual(Endianness.Native, i32_native.endian);
-    try std.testing.expectEqual(ElementType.Int32, i32_native.element_type);
+    const i32_native = try ElementType.fromString("=i4");
+    try std.testing.expect(i32_native.Int32 == null);
 
-    const u64_native = try TypeDescriptor.fromString("=u8");
-    try std.testing.expectEqual(Endianness.Native, u64_native.endian);
-    try std.testing.expectEqual(ElementType.UInt64, u64_native.element_type);
+    const u64_native = try ElementType.fromString("=u8");
+    try std.testing.expect(u64_native.UInt64 == null);
 
-    const f64_native = try TypeDescriptor.fromString("=f8");
-    try std.testing.expectEqual(Endianness.Native, f64_native.endian);
-    try std.testing.expectEqual(ElementType.Float64, f64_native.element_type);
+    const f64_native = try ElementType.fromString("=f8");
+    try std.testing.expect(f64_native.Float64 == null);
 }
 
 test "error on too short descr" {
-    try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString(""));
-    try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("<"));
+    try std.testing.expectError(ParseDescrError.TooShort, ElementType.fromString(""));
+    try std.testing.expectError(ParseDescrError.TooShort, ElementType.fromString("<"));
 }
 
 test "error on invalid endianness" {
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("@i4"));
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("!f8"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("@i4"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("!f8"));
 }
 
 test "error on invalid endianness for bool" {
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("<b1"));
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString(">b1"));
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("=b1"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("<b1"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString(">b1"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("=b1"));
 }
 
 test "error on invalid endianness for i1/u1" {
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("<i1"));
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString(">u1"));
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("=i1"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("<i1"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString(">u1"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("=i1"));
 }
 
 test "error on invalid endianness for multi-byte integers" {
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("|i2"));
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("|u4"));
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("|i8"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("|i2"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("|u4"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("|i8"));
 }
 
 test "error on invalid endianness for floats" {
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("|f4"));
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("|f8"));
-    try std.testing.expectError(ParseDescrError.InvalidEndianness, TypeDescriptor.fromString("|f16"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("|f4"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("|f8"));
+    try std.testing.expectError(ParseDescrError.InvalidEndianness, ElementType.fromString("|f16"));
 }
 
 test "error on invalid bool size" {
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("|b2"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("|b4"));
-    try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("|b"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("|b2"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("|b4"));
+    try std.testing.expectError(ParseDescrError.TooShort, ElementType.fromString("|b"));
 }
 
 test "error on unsupported integer sizes" {
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("<i3"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">u5"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("=i16"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("<i3"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString(">u5"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("=i16"));
 }
 
 test "error on unsupported float sizes" {
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("<f2"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">f12"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("=f32"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("<f2"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString(">f12"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("=f32"));
 }
 
 test "error on unsupported type characters" {
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">S10"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("=U5"));
-    try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("|O"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("<M8"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString(">S10"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("=U5"));
+    try std.testing.expectError(ParseDescrError.TooShort, ElementType.fromString("|O"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("<M8"));
 }
 
 test "error on invalid integer descr length" {
-    try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("<i"));
-    try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString(">u"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString("<i44"));
+    try std.testing.expectError(ParseDescrError.TooShort, ElementType.fromString("<i"));
+    try std.testing.expectError(ParseDescrError.TooShort, ElementType.fromString(">u"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("<i44"));
 }
 
 test "error on invalid float descr length" {
-    try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("<f"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">f123"));
+    try std.testing.expectError(ParseDescrError.TooShort, ElementType.fromString("<f"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString(">f123"));
 }
 
 test "error on invalid complex descr length" {
-    try std.testing.expectError(ParseDescrError.TooShort, TypeDescriptor.fromString("<c"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">c24"));
-    try std.testing.expectError(ParseDescrError.InvalidType, TypeDescriptor.fromString(">c32"));
+    try std.testing.expectError(ParseDescrError.TooShort, ElementType.fromString("<c"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString(">c24"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString(">c32"));
 }

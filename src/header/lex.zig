@@ -45,17 +45,18 @@ pub const LexerError = error{
     InvalidByte,
 };
 
-pub const NpyHeaderLexer = struct {
+/// A lexer for tokenizing .npy header input.
+pub const Lexer = struct {
     const Self = @This();
 
-    /// Peeked token cache
-    peeked: ?Token,
-    /// The encoding of the header
-    encoding: HeaderEncoding,
     /// The header input (owned by caller)
     input: []const u8,
     /// The start byte of the current character (UTF-8 code point)
     position: usize,
+    /// Peeked token cache
+    peeked: ?Token,
+    /// The encoding of the header
+    encoding: HeaderEncoding,
 
     /// Initialize a new lexer with the given input and encoding.
     /// The input slice must outlive the lexer.
@@ -262,13 +263,13 @@ fn expectToken(expected: LexerError!Token, actual: LexerError!Token) !void {
 }
 
 test "empty input returns EOF right away" {
-    var lexer = NpyHeaderLexer.init("", .Ascii);
+    var lexer = Lexer.init("", .Ascii);
     try expectToken(.EOF, lexer.advance());
     try expectToken(.EOF, lexer.advance());
 }
 
 test "all single-character tokens" {
-    var lexer = NpyHeaderLexer.init("{ }:,()", .Ascii);
+    var lexer = Lexer.init("{ }:,()", .Ascii);
     try expectToken(.LBrace, lexer.advance());
     try expectToken(.RBrace, lexer.advance());
     try expectToken(.Colon, lexer.advance());
@@ -280,7 +281,7 @@ test "all single-character tokens" {
 }
 
 test "multiple tokens with whitespaces" {
-    var lexer = NpyHeaderLexer.init(" { 'key' : 'value' , } ", .Ascii);
+    var lexer = Lexer.init(" { 'key' : 'value' , } ", .Ascii);
     try expectToken(.LBrace, lexer.advance());
     try expectToken(Token{ .Literal = .{ .String = "key" } }, lexer.advance());
     try expectToken(.Colon, lexer.advance());
@@ -292,7 +293,7 @@ test "multiple tokens with whitespaces" {
 }
 
 test "valid number literals" {
-    var lexer = NpyHeaderLexer.init("0 123 4567 0123456789", .Ascii);
+    var lexer = Lexer.init("0 123 4567 0123456789", .Ascii);
     try expectToken(Token{ .Literal = .{ .Number = 0 } }, lexer.advance());
     try expectToken(Token{ .Literal = .{ .Number = 123 } }, lexer.advance());
     try expectToken(Token{ .Literal = .{ .Number = 4567 } }, lexer.advance());
@@ -316,19 +317,19 @@ test "invalid number literal" {
         max_str[i] = '9';
     }
 
-    var lexer = NpyHeaderLexer.init(max_str, .Ascii);
+    var lexer = Lexer.init(max_str, .Ascii);
     try expectToken(LexerError.InvalidNumberLiteral, lexer.advance());
 }
 
 test "boolean literals" {
-    var lexer = NpyHeaderLexer.init(" True False Invalid ", .Ascii);
+    var lexer = Lexer.init(" True False Invalid ", .Ascii);
     try expectToken(Token{ .Literal = .{ .Boolean = true } }, lexer.advance());
     try expectToken(Token{ .Literal = .{ .Boolean = false } }, lexer.advance());
     try expectToken(LexerError.UnsupportedIdentifier, lexer.advance());
 }
 
 test "string literals with ASCII encoding" {
-    var lexer = NpyHeaderLexer.init("'hello' 'world' 'Zig is great!' '\x80\xFF' ''", .Ascii);
+    var lexer = Lexer.init("'hello' 'world' 'Zig is great!' '\x80\xFF' ''", .Ascii);
     try expectToken(Token{ .Literal = .{ .String = "hello" } }, lexer.advance());
     try expectToken(Token{ .Literal = .{ .String = "world" } }, lexer.advance());
     try expectToken(Token{ .Literal = .{ .String = "Zig is great!" } }, lexer.advance());
@@ -336,7 +337,7 @@ test "string literals with ASCII encoding" {
 }
 
 test "string literals with UTF-8 encoding" {
-    var lexer = NpyHeaderLexer.init(" 'xin chào' 'hello world' 'こんにちは世界' 'Zig ⚡' '\xF8\xF9', ''", .Utf8);
+    var lexer = Lexer.init(" 'xin chào' 'hello world' 'こんにちは世界' 'Zig ⚡' '\xF8\xF9', ''", .Utf8);
     try expectToken(Token{ .Literal = .{ .String = "xin chào" } }, lexer.advance());
     try expectToken(Token{ .Literal = .{ .String = "hello world" } }, lexer.advance());
     try expectToken(Token{ .Literal = .{ .String = "こんにちは世界" } }, lexer.advance());
@@ -347,42 +348,42 @@ test "string literals with UTF-8 encoding" {
 test "error on truncated UTF-8 sequence in string literal" {
     // Incomplete UTF-8 sequence (0xC3 expects another byte)
     const input = "'\xC3'";
-    var lexer = NpyHeaderLexer.init(input, .Utf8);
+    var lexer = Lexer.init(input, .Utf8);
     try expectToken(LexerError.Utf8InvalidCharacter, lexer.advance());
 }
 
 test "error on invalid UTF-8 continuation bytes in string literal" {
     // Invalid continuation byte (0xC3 0x28 - 0x28 is not a valid continuation)
     const input = "'\xC3\x28'";
-    var lexer = NpyHeaderLexer.init(input, .Utf8);
+    var lexer = Lexer.init(input, .Utf8);
     try expectToken(LexerError.Utf8InvalidCharacter, lexer.advance());
 }
 
 test "error on unsupported identifier" {
-    var lexer = NpyHeaderLexer.init("{ 'key': None }", .Ascii);
+    var lexer = Lexer.init("{ 'key': None }", .Ascii);
     try expectToken(Token.LBrace, lexer.advance());
     try expectToken(Token{ .Literal = .{ .String = "key" } }, lexer.advance());
     try expectToken(Token.Colon, lexer.advance());
     try expectToken(LexerError.UnsupportedIdentifier, lexer.advance());
 
-    lexer = NpyHeaderLexer.init("( custom_word, )", .Ascii);
+    lexer = Lexer.init("( custom_word, )", .Ascii);
     try expectToken(Token.LParen, lexer.advance());
     try expectToken(LexerError.UnsupportedIdentifier, lexer.advance());
 }
 
 test "error on dangling opening quote" {
-    var lexer = NpyHeaderLexer.init("'unclosed", .Ascii);
+    var lexer = Lexer.init("'unclosed", .Ascii);
     try expectToken(LexerError.UnexpectedEndOfInput, lexer.advance());
 }
 
 test "error on invalid byte" {
-    var lexer = NpyHeaderLexer.init("True#", .Ascii);
+    var lexer = Lexer.init("True#", .Ascii);
     try expectToken(Token{ .Literal = .{ .Boolean = true } }, lexer.advance());
     try expectToken(LexerError.InvalidByte, lexer.advance());
 }
 
 test "peek does not consume the token" {
-    var lexer = NpyHeaderLexer.init("{", .Ascii);
+    var lexer = Lexer.init("{", .Ascii);
     const peeked = try lexer.peek();
     try std.testing.expectEqual(Token.LBrace, @as(std.meta.Tag(Token), peeked));
 
@@ -391,7 +392,7 @@ test "peek does not consume the token" {
 }
 
 test "multiple peeks return the same token" {
-    var lexer = NpyHeaderLexer.init(":", .Ascii);
+    var lexer = Lexer.init(":", .Ascii);
     const peek1 = try lexer.peek();
     const peek2 = try lexer.peek();
     const peek3 = try lexer.peek();
@@ -401,7 +402,7 @@ test "multiple peeks return the same token" {
 }
 
 test "advance after peek returns the cached token" {
-    var lexer = NpyHeaderLexer.init("'test' 123", .Ascii);
+    var lexer = Lexer.init("'test' 123", .Ascii);
 
     const peeked = try lexer.peek();
     try expectToken(Token{ .Literal = .{ .String = "test" } }, peeked);

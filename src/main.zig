@@ -25,6 +25,7 @@ fn processNpyFile(file: std.fs.File) !void {
     }
     std.debug.print("Mapping file of size: {}\n", .{read_size});
 
+    // TODO: implement a slice reader to parse header directly from a buffer
     const file_buffer = try std.posix.mmap(
         null,
         read_size,
@@ -38,20 +39,28 @@ fn processNpyFile(file: std.fs.File) !void {
     const data_buffer = file_buffer[file_reader.pos..];
     std.debug.print("Data buffer length: {}\n", .{data_buffer.len});
 
-    // TODO: Validate shape to prevent overflow
-    const total_elements = blk: {
-        var prod: usize = 1;
-        for (header.shape) |dim| {
-            prod *= dim;
-        }
-        break :blk prod;
+    const total_elementss = znpy.shapeSizeChecked(header.descr, header.shape) orelse {
+        std.debug.print("Array size overflowed\n", .{});
+        return;
     };
-    std.debug.print("Total elements: {}\n", .{total_elements});
-    std.debug.print("Element type: {any}\n", .{header.descr.element_type});
+    std.debug.print("Element's type descriptor: {any}\n", .{header.descr});
+    std.debug.print("Total number of elements: {}\n", .{total_elementss});
 
-    // TODO: Provide size for every element type
-    std.debug.assert(header.descr.element_type == .Float64);
-    std.debug.assert(data_buffer.len == total_elements * 8);
+    std.debug.assert(header.descr == .Float64);
+    std.debug.assert(data_buffer.len == total_elementss * header.descr.byteSize());
+
+    const float64_slice = znpy.Element(f64).bytesAsSlice(
+        data_buffer,
+        total_elementss,
+        header.descr,
+    ) catch |e| {
+        std.debug.print("Error interpreting data buffer as f64 slice: {}\n", .{e});
+        return;
+    };
+
+    for (float64_slice, 0..) |value, index| {
+        std.debug.print("Element [{}]: {}\n", .{ index, value });
+    }
 }
 
 pub fn main() !void {

@@ -62,7 +62,7 @@ pub const AstBuildError = lex.LexerError || ParserError || std.mem.Allocator.Err
 pub const Parser = struct {
     const Self = @This();
 
-    lexer: lex.NpyHeaderLexer,
+    lexer: lex.Lexer,
 
     /// Initializes the parser with the given header buffer and encoding.
     /// Input buffer must outlive the parser.
@@ -71,7 +71,7 @@ pub const Parser = struct {
     /// header_encoding - The encoding type of the header.
     pub fn init(header_buffer: []const u8, header_encoding: root.HeaderEncoding) Self {
         return .{
-            .lexer = lex.NpyHeaderLexer.init(header_buffer, header_encoding),
+            .lexer = lex.Lexer.init(header_buffer, header_encoding),
         };
     }
 
