@@ -34,8 +34,8 @@
 //! ```
 const std = @import("std");
 const log = std.log.scoped(.npy_header);
-const parse = @import("parse.zig");
-const descr = @import("descr.zig");
+const parse = @import("header/parse.zig");
+const descr = @import("header/descr.zig");
 
 pub const ElementType = descr.ElementType;
 

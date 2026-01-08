@@ -1,7 +1,7 @@
 //! By convention, root.zig is the root source file when making a library.
 const std = @import("std");
-pub const header = @import("header/root.zig");
-pub const elements = @import("elements/root.zig");
+pub const header = @import("header.zig");
+pub const elements = @import("elements.zig");
 
 pub const ElementType = header.ElementType;
 pub const Element = elements.Element;

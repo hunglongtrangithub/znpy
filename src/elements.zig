@@ -1,6 +1,6 @@
 //! Module for array element functions and types.
 const std = @import("std");
-const header = @import("../header/root.zig");
+const header = @import("header.zig");
 const builtin = @import("builtin");
 const native_endian = builtin.cpu.arch.endian();
 

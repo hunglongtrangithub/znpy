@@ -1,7 +1,7 @@
 const std = @import("std");
 const log = std.log.scoped(.npy_lexer);
-const root = @import("root.zig");
-pub const HeaderEncoding = root.HeaderEncoding;
+const header = @import("../header.zig");
+pub const HeaderEncoding = header.HeaderEncoding;
 
 /// A literal value in the .npy header.
 pub const Literal = union(enum) {

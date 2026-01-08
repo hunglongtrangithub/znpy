@@ -1,6 +1,6 @@
 const std = @import("std");
 const lex = @import("lex.zig");
-const root = @import("root.zig");
+const header = @import("../header.zig");
 const log = std.log.scoped(.npy_parser);
 const Token = lex.Token;
 
@@ -69,7 +69,7 @@ pub const Parser = struct {
     /// Parameters:
     /// header_buffer - The buffer containing the header content.
     /// header_encoding - The encoding type of the header.
-    pub fn init(header_buffer: []const u8, header_encoding: root.HeaderEncoding) Self {
+    pub fn init(header_buffer: []const u8, header_encoding: header.HeaderEncoding) Self {
         return .{
             .lexer = lex.Lexer.init(header_buffer, header_encoding),
         };
