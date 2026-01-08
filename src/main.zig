@@ -2,18 +2,7 @@ const std = @import("std");
 const znpy = @import("znpy");
 
 fn processNpyFile(file: std.fs.File) !void {
-    var read_buffer: [1024]u8 = undefined;
-    var file_reader = file.reader(read_buffer[0..]);
-
-    // If header size is larger than 1024 bytes, use heap allocation
-    var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
-    const allocator = fallback.get();
-    const header = try znpy.header.Header.fromReader(&file_reader.interface, allocator);
-    defer header.deinit(allocator);
-
-    std.debug.print("Numbfer of bytes read: {}\n", .{file_reader.pos});
-    std.debug.print("Numpy Header: {any}\n", .{header});
-
+    // Get file size
     const file_stat = try file.stat();
     const read_size = std.math.cast(usize, file_stat.size) orelse {
         std.debug.print("File size is too large to map\n", .{});
@@ -25,7 +14,7 @@ fn processNpyFile(file: std.fs.File) !void {
     }
     std.debug.print("Mapping file of size: {}\n", .{read_size});
 
-    // TODO: implement a slice reader to parse header directly from a buffer
+    // Read all file contents into memory using mmap
     const file_buffer = try std.posix.mmap(
         null,
         read_size,
@@ -36,7 +25,18 @@ fn processNpyFile(file: std.fs.File) !void {
     );
     defer std.posix.munmap(file_buffer);
 
-    const data_buffer = file_buffer[file_reader.pos..];
+    var slice_reader = znpy.header.SliceReader.init(file_buffer);
+
+    // If header size is larger than 1024 bytes, use heap allocation
+    var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
+    const allocator = fallback.get();
+    const header = try znpy.header.Header.fromSliceReader(&slice_reader, allocator);
+    defer header.deinit(allocator);
+
+    std.debug.print("Numbfer of bytes read: {}\n", .{slice_reader.pos});
+    std.debug.print("Numpy Header: {any}\n", .{header});
+
+    const data_buffer = file_buffer[slice_reader.pos..];
     std.debug.print("Data buffer length: {}\n", .{data_buffer.len});
 
     const total_elementss = znpy.shapeSizeChecked(header.descr, header.shape) orelse {
