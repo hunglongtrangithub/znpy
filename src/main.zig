@@ -40,7 +40,7 @@ fn processNpyFile(file: std.fs.File) !void {
     const data_buffer = file_buffer[slice_reader.pos..];
     std.debug.print("Data buffer length: {}\n", .{data_buffer.len});
 
-    const total_elementss = znpy.shapeSizeChecked(header.descr, header.shape) orelse {
+    const total_elementss = znpy.dimension.shapeSizeChecked(header.descr, header.shape) orelse {
         std.debug.print("Array size overflowed\n", .{});
         return;
     };
