@@ -8,7 +8,7 @@ const boolean = @import("elements/boolean.zig");
 
 const native_endian = builtin.cpu.arch.endian();
 
-const ViewDataError = error{
+pub const ViewDataError = error{
     /// The provided element type does not match the expected type.
     TypeMismatch,
     /// The provided data contains invalid boolean values (not 0 or 1).
@@ -39,7 +39,7 @@ pub fn Element(comptime T: type) type {
         const Self = @This();
 
         /// Interprets a byte slice as a slice of the specified element type `T`.
-        pub fn bytesAsSlice(bytes: []const u8, len: usize, type_descr: header.ElementType) ViewDataError![]const T {
+        pub fn bytesAsSlice(bytes: []u8, len: usize, type_descr: header.ElementType) ViewDataError![]T {
             // Element types must match
             if (std.meta.activeTag(type_descr) != std.meta.activeTag(element_type)) {
                 return ViewDataError.TypeMismatch;
@@ -94,7 +94,7 @@ pub fn Element(comptime T: type) type {
             // Both length and alignment checks passed, we can:
 
             // 1. Now upgrade the alignment in the type system.
-            const aligned_bytes = @as([]align(@alignOf(T)) const u8, @alignCast(bytes));
+            const aligned_bytes = @as([]align(@alignOf(T)) u8, @alignCast(bytes));
 
             // 2. Now bytesAsSlice will be happy because the input is []align(T) const u8
             return std.mem.bytesAsSlice(T, aligned_bytes);

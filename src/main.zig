@@ -2,6 +2,8 @@ const std = @import("std");
 
 const znpy = @import("znpy");
 
+const dirname = std.fs.path.dirname;
+
 fn processNpyFile(file: std.fs.File) !void {
     // Get file size
     const file_stat = try file.stat();
@@ -26,48 +28,30 @@ fn processNpyFile(file: std.fs.File) !void {
     );
     defer std.posix.munmap(file_buffer);
 
-    var slice_reader = znpy.header.SliceReader.init(file_buffer);
-
     // If header size is larger than 1024 bytes, use heap allocation
     var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
     const allocator = fallback.get();
-    const header = try znpy.header.Header.fromSliceReader(&slice_reader, allocator);
-    defer header.deinit(allocator);
 
-    std.debug.print("Numbfer of bytes read: {}\n", .{slice_reader.pos});
-    std.debug.print("Numpy Header: {any}\n", .{header});
-
-    const data_buffer = file_buffer[slice_reader.pos..];
-    std.debug.print("Data buffer length: {}\n", .{data_buffer.len});
-
-    const total_elements = znpy.dimension.shapeSizeChecked(header.descr, header.shape) orelse {
-        std.debug.print("Array size overflowed\n", .{});
+    var array_view: znpy.ArrayView(i16) = znpy.ArrayView(i16).fromFileBuffer(file_buffer, allocator) catch |e| {
+        std.debug.print("Failed to create ArrayView from file buffer: {}\n", .{e});
         return;
     };
-    std.debug.print("Array shape: {any}\n", .{header.shape});
-    std.debug.print("Element's type descriptor: {any}\n", .{header.descr});
-    std.debug.print("Total number of elements: {}\n", .{total_elements});
+    defer array_view.deinit(allocator);
 
-    std.debug.assert(header.descr == .Float64);
-    std.debug.assert(data_buffer.len == total_elements * header.descr.byteSize());
-
-    const float64_slice = znpy.Element(f64).bytesAsSlice(
-        data_buffer,
-        total_elements,
-        header.descr,
-    ) catch |e| {
-        std.debug.print("Error interpreting data buffer as f64 slice: {}\n", .{e});
-        return;
-    };
-
-    for (float64_slice, 0..) |value, index| {
-        std.debug.print("Element [{}]: {}\n", .{ index, value });
+    for (0..array_view.dims[0]) |i| {
+        for (0..array_view.dims[1]) |j| {
+            for (0..array_view.dims[2]) |k| {
+                const value = array_view.at(&[3]usize{ i, j, k }).?.*;
+                std.debug.print("Element at ({}, {}, {}) = {}\n", .{ i, j, k, value });
+            }
+        }
     }
 }
 
 pub fn main() !void {
-    // const npy_file_path = "test-data/empty/empty_0d.npy";
-    const npy_file_path = "test.npy";
+    const source_dir = comptime dirname(@src().file) orelse "src";
+    const npy_file_path = comptime source_dir ++ "/" ++ "../test-data/shapes/i8_5d_2x3x4x5x6.npy";
+    // const npy_file_path = "test.npy";
     const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
         std.debug.print("Failed to open file: {}\n", .{e});
         return;

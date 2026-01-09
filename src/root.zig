@@ -4,12 +4,15 @@ const std = @import("std");
 pub const header = @import("header.zig");
 pub const elements = @import("elements.zig");
 pub const dimension = @import("dimension.zig");
+const array = @import("array.zig");
 
 pub const ElementType = header.ElementType;
 pub const Element = elements.Element;
+pub const ArrayView = array.ArrayView;
 
 test {
     _ = header;
     _ = elements;
     _ = dimension;
+    _ = array;
 }

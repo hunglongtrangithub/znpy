@@ -25,7 +25,7 @@ pub fn shapeSizeChecked(T: header.ElementType, shape: []const usize) ?usize {
 }
 
 /// A multi-dimensional shape of an array, with a dynamic number of dimensions.
-const Shape = struct {
+pub const Shape = struct {
     /// The size of each dimension. The slice is owned by the caller.
     /// The total number of elements is the product of all dimensions,
     /// which must not overflow `std.math.maxInt(isize)`.
@@ -35,23 +35,29 @@ const Shape = struct {
 
     const Self = @This();
 
-    const FromHeaderError = error{ShapeSizeOverflow};
+    pub const FromHeaderError = error{ShapeSizeOverflow};
 
     /// Create a Shape from a numpy header.
-    /// Returns an error if the total number of elements overflows `isize`.
-    pub fn fromHeader(npy_header: header.Header) FromHeaderError!Self {
+    /// Returns an error if the shape's total size in bytes overflows isize.
+    /// On success, also returns the total number of elements.
+    pub fn fromHeader(npy_header: header.Header) FromHeaderError!struct { Self, usize } {
         // Check that the shape length fits in isize
-        _ = shapeSizeChecked(npy_header.descr, npy_header.shape) orelse {
-            return FromHeaderError.ShapeSizeOverflow;
+        const num_elements = shapeSizeChecked(npy_header.descr, npy_header.shape) orelse {
+            return error.ShapeSizeOverflow;
         };
-        return Self{
+        return .{ Self{
             .dims = npy_header.shape,
             .order = npy_header.order,
-        };
+        }, num_elements };
     }
 
     /// Compute the strides for this shape, allocating the result using the given allocator.
-    /// Strides slice should have the same length as the number of dimensions in the shape.
+    /// Strides slice has the same length as the number of dimensions in the shape.
+    ///
+    /// **Invariant**: For any valid multi-dimensional index (where `0 <= indices[i] < dims[i]` for all `i`),
+    /// the offset calculation `Σ(indices[i] * strides[i])` is guaranteed to:
+    /// 1. Be less than the total number of elements in the shape
+    /// 2. Fit in isize without overflow
     pub fn getStrides(self: *const Self, allocator: std.mem.Allocator) std.mem.Allocator.Error![]const isize {
         if (self.dims.len == 0) {
             // Scalar case: no dimensions, no strides
@@ -66,35 +72,36 @@ const Shape = struct {
             return strides;
         }
 
-        return switch (self.order) {
-            .C => blk: {
+        switch (self.order) {
+            .C => {
                 // Shape (a, b, c) => Give strides (b * c, c, 1)
                 var stride: isize = 1;
                 for (0..self.dims.len) |i_rev| {
                     // NOTE: self.dims is not empty, so this index is safe
                     const i = self.dims.len - 1 - i_rev;
                     strides[i] = stride;
-                    // NOTE: this cast is safe because we have already verified that
+                    // SAFETY: this cast and multiplication is overflow-safe because we have already verified that
                     // the total size does not overflow isize, which means the individual
                     // dimensions and strides must also fit in isize.
                     const dim = self.dims[i];
                     stride *= @intCast(dim);
                 }
-                break :blk strides;
             },
-            .F => blk: {
+            .F => {
                 // Shape (a, b, c) => Give strides (1, a, a * b)
                 var stride: isize = 1;
                 for (self.dims, 0..) |dim, i| {
                     strides[i] = stride;
-                    // NOTE: this cast is safe because we have already verified that
+                    // SAFETY: this cast and multiplication is overflow-safe because we have already verified that
                     // the total size does not overflow isize, which means the individual
                     // dimensions and strides must also fit in isize.
                     stride *= @intCast(dim);
                 }
-                break :blk strides;
             },
-        };
+        }
+
+        std.debug.assert(strides.len == self.dims.len);
+        return strides;
     }
 };
 
@@ -146,7 +153,7 @@ test "Shape.fromHeader - valid shape" {
         .descr = .{ .Float64 = null },
         .order = .C,
     };
-    const shape = try Shape.fromHeader(npy_header);
+    const shape, _ = try Shape.fromHeader(npy_header);
     try std.testing.expectEqual(@as(usize, 3), shape.dims.len);
     try std.testing.expectEqual(@as(usize, 2), shape.dims[0]);
     try std.testing.expectEqual(@as(usize, 3), shape.dims[1]);
@@ -163,7 +170,7 @@ test "Shape.fromHeader - overflow error" {
         .descr = .{ .Float64 = null },
         .order = .C,
     };
-    const result = Shape.fromHeader(npy_header);
+    const result, _ = Shape.fromHeader(npy_header);
     try std.testing.expectError(Shape.FromHeaderError.ShapeSizeOverflow, result);
     _ = allocator;
 }
@@ -188,7 +195,7 @@ test "Shape.getStrides - shape with zero dimension C order" {
         .descr = .{ .Float64 = null },
         .order = .C,
     };
-    const shape = try Shape.fromHeader(npy_header);
+    const shape, _ = try Shape.fromHeader(npy_header);
     const strides = try shape.getStrides(allocator);
     defer allocator.free(strides);
     try std.testing.expectEqual(@as(usize, 3), strides.len);
@@ -205,7 +212,7 @@ test "Shape.getStrides - shape with zero dimension F order" {
         .descr = .{ .Float64 = null },
         .order = .F,
     };
-    const shape = try Shape.fromHeader(npy_header);
+    const shape, _ = try Shape.fromHeader(npy_header);
     const strides = try shape.getStrides(allocator);
     defer allocator.free(strides);
     try std.testing.expectEqual(@as(usize, 3), strides.len);
