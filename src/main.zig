@@ -42,11 +42,11 @@ fn readNpyArrayMmap(npy_file_path: []const u8, allocator: std.mem.Allocator) !vo
         return;
     };
 
-    std.debug.assert(array_view.dims.len == 3);
+    std.debug.assert(array_view.shape.dims.len == 3);
 
-    for (0..array_view.dims[0]) |i| {
-        for (0..array_view.dims[1]) |j| {
-            for (0..array_view.dims[2]) |k| {
+    for (0..array_view.shape.dims[0]) |i| {
+        for (0..array_view.shape.dims[1]) |j| {
+            for (0..array_view.shape.dims[2]) |k| {
                 const value = array_view.get([3]usize{ i, j, k }).?;
                 std.debug.print("Element at ({}, {}, {}) = {}\n", .{ i, j, k, value });
             }

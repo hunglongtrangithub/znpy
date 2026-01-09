@@ -12,16 +12,10 @@ const elements_mod = @import("../elements.zig");
 pub fn DynamicArray(comptime T: type) type {
     const element_type = header_mod.ElementType.fromZigType(T) catch @compileError("Unsupported element type for DynamicArray");
     return struct {
-        /// The dimensions of the array.
-        dims: []const usize,
-        /// The strides of the array. Always the same length as `dims`.
-        strides: []const isize,
+        /// The shape of the array (dimensions, strides, order, num_elements)
+        shape: shape_mod.DynamicShape,
         /// This pointer always points to "Logical Index 0" of the array.
         data_ptr: [*]T,
-        /// Number of elements in the array.
-        // NOTE: Technically redundant (can be computed from dims), but storing this
-        // will fill the padded space in the struct, and we may need it later.
-        num_elements: usize,
 
         const Self = @This();
 
@@ -32,21 +26,19 @@ pub fn DynamicArray(comptime T: type) type {
         /// Initialize a new `DynamicArray` with the given dimensions and order.
         /// A new data buffer will be allocated using the provided allocator.
         pub fn init(dims: []const usize, order: header_mod.Order, allocator: std.mem.Allocator) InitError!Self {
-            const shape, const num_elements = try shape_mod.DynamicShape.init(
+            const shape = try shape_mod.DynamicShape.init(
                 dims,
                 order,
                 element_type,
+                allocator,
             );
-            const strides = try shape.getStrides();
 
             // Allocate the data buffer
-            const data_buffer = try allocator.alloc(T, num_elements);
+            const data_buffer = try allocator.alloc(T, shape.num_elements);
 
             return Self{
-                .dims = dims,
-                .strides = strides,
+                .shape = shape,
                 .data_ptr = data_buffer.ptr,
-                .num_elements = num_elements,
             };
         }
 
@@ -62,21 +54,17 @@ pub fn DynamicArray(comptime T: type) type {
             errdefer header.deinit(allocator);
 
             const byte_buffer = file_buffer[slice_reader.pos..];
-            const shape, const num_elements = try shape_mod.DynamicShape.fromHeader(header);
+            const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
 
             const data_buffer = try elements_mod.Element(T).bytesAsSlice(
                 byte_buffer,
-                num_elements,
+                shape.num_elements,
                 header.descr,
             );
 
-            const strides = try shape.getStrides(allocator);
-
             return Self{
-                .dims = shape.dims,
-                .strides = strides,
+                .shape = shape,
                 .data_ptr = data_buffer.ptr,
-                .num_elements = num_elements,
             };
         }
 
@@ -107,11 +95,11 @@ pub fn DynamicArray(comptime T: type) type {
         ///   - null if the index is invalid (wrong number of dimensions or out of bounds)
         fn strideOffset(self: *const Self, index: []const usize) ?isize {
             // Dimension mismatch
-            if (index.len != self.dims.len) return null;
+            if (index.len != self.shape.dims.len) return null;
 
             var offset: isize = 0;
 
-            for (index, self.dims, self.strides) |idx, dim, stride| {
+            for (index, self.shape.dims, self.shape.strides) |idx, dim, stride| {
                 if (idx >= dim) {
                     // Index out of bounds
                     return null;
@@ -153,16 +141,10 @@ pub fn DynamicArray(comptime T: type) type {
 /// `T` is the element type.
 pub fn ConstDynamicArray(comptime T: type) type {
     return struct {
-        /// The dimensions of the array.
-        dims: []const usize,
-        /// The strides of the array. Always the same length as `dims`.
-        strides: []const isize,
+        /// The shape of the array (dimensions, strides, order, num_elements)
+        shape: shape_mod.DynamicShape,
         /// This pointer always points to "Logical Index 0" of the array.
         data_ptr: [*]const T,
-        /// Number of elements in the array.
-        // NOTE: Technically redundant (can be computed from dims), but storing this
-        // will fill the padded space in the struct, and we may need it later.
-        num_elements: usize,
 
         const Self = @This();
 
@@ -178,29 +160,24 @@ pub fn ConstDynamicArray(comptime T: type) type {
             errdefer header.deinit(allocator);
 
             const byte_buffer = file_buffer[slice_reader.pos..];
-            const shape, const num_elements = try shape_mod.DynamicShape.fromHeader(header);
+            const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
 
             const data_buffer = try elements_mod.Element(T).bytesAsSlice(
                 byte_buffer,
-                num_elements,
+                shape.num_elements,
                 header.descr,
             );
 
-            const strides = try shape.getStrides(allocator);
-
             return Self{
-                .dims = shape.dims,
-                .strides = strides,
+                .shape = shape,
                 .data_ptr = data_buffer.ptr,
-                .num_elements = num_elements,
             };
         }
 
         /// Deinitialize the `ArrayView`, freeing any allocated resources.
         /// Only needed for dynamic rank arrays.
         pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
-            allocator.free(self.strides);
-            allocator.free(self.dims);
+            self.shape.deinit(allocator);
         }
 
         /// Get the element at the given multi-dimensional index.
@@ -216,11 +193,11 @@ pub fn ConstDynamicArray(comptime T: type) type {
         ///   - null if the index is invalid (wrong number of dimensions or out of bounds)
         fn strideOffset(self: *const Self, index: []const usize) ?isize {
             // Dimension mismatch
-            if (index.len != self.dims.len) return null;
+            if (index.len != self.shape.dims.len) return null;
 
             var offset: isize = 0;
 
-            for (index, self.dims, self.strides) |idx, dim, stride| {
+            for (index, self.shape.dims, self.shape.strides) |idx, dim, stride| {
                 if (idx >= dim) {
                     // Index out of bounds
                     return null;

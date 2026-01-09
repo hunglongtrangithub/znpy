@@ -13,14 +13,10 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
     const element_type = header_mod.ElementType.fromZigType(T) catch @compileError("Unsupported type for StaticArray");
 
     return struct {
-        /// The dimensions of the array.
-        dims: [rank]usize,
-        /// The strides of the array. Always the same length as `dims`.
-        strides: [rank]isize,
+        /// The shape of the array (dimensions, strides, order, num_elements)
+        shape: shape_mod.StaticShape(rank),
         /// This pointer always points to "Logical Index 0" of the array.
         data_ptr: [*]T,
-        /// The total number of elements in the array.
-        num_elements: usize,
 
         const Self = @This();
 
@@ -31,21 +27,18 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         /// Initialize a new `StaticArray` with the given dimensions and order.
         /// A new data buffer will be allocated using the provided allocator.
         pub fn init(dims: [rank]usize, order: header_mod.Order, allocator: std.mem.Allocator) InitError!Self {
-            const shape, const num_elements = try shape_mod.StaticShape(rank).init(
+            const shape = try shape_mod.StaticShape(rank).init(
                 dims,
                 order,
                 element_type,
             );
-            const strides = shape.getStrides();
 
             // Allocate the data buffer
-            const data_buffer = try allocator.alloc(T, num_elements);
+            const data_buffer = try allocator.alloc(T, shape.num_elements);
 
             return Self{
-                .dims = dims,
-                .strides = strides,
+                .shape = shape,
                 .data_ptr = data_buffer.ptr,
-                .num_elements = num_elements,
             };
         }
 
@@ -61,22 +54,17 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
             errdefer header.deinit(allocator);
 
             const byte_buffer = file_buffer[slice_reader.pos..];
-            const shape, const num_elements = try shape_mod.StaticShape(rank).fromHeader(header);
+            const shape = try shape_mod.StaticShape(rank).fromHeader(header);
 
             const data_buffer = try elements_mod.Element(T).bytesAsSlice(
                 byte_buffer,
-                num_elements,
+                shape.num_elements,
                 header.descr,
             );
 
-            const strides = shape.getStrides();
-
             return Self{
-                // In dynamic case, shape.dims (from header.shape) is allocated by the allocator, so we can just store the pointer here
-                .dims = shape.dims,
-                .strides = strides,
+                .shape = shape,
                 .data_ptr = data_buffer.ptr,
-                .num_elements = num_elements,
             };
         }
 
@@ -102,12 +90,12 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
             var offset: isize = 0;
 
             inline for (0..rank) |i| {
-                if (index[i] >= self.dims[i]) {
+                if (index[i] >= self.shape.dims[i]) {
                     // Index out of bounds
                     return null;
                 }
                 // SAFETY: This cast is safe due to the bounds check above (dim fits in isize and idx < dim)
-                offset += @as(isize, @intCast(index[i])) * self.strides[i];
+                offset += @as(isize, @intCast(index[i])) * self.shape.strides[i];
             }
             return offset;
         }
@@ -142,13 +130,10 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
 /// `rank` is the number of dimensions.
 pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
     return struct {
-        /// The dimensions of the array.
-        dims: [rank]usize,
-        /// The strides of the array. Always the same length as `dims`.
-        strides: [rank]isize,
+        /// The shape of the array (dimensions, strides, order, num_elements)
+        shape: shape_mod.StaticShape(rank),
         /// This pointer always points to "Logical Index 0" of the array.
         data_ptr: [*]const T,
-        num_elements: usize,
 
         const Self = @This();
 
@@ -164,21 +149,17 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
             errdefer header.deinit(allocator);
 
             const byte_buffer = file_buffer[slice_reader.pos..];
-            const shape, const num_elements = try shape_mod.StaticShape(rank).fromHeader(header);
+            const shape = try shape_mod.StaticShape(rank).fromHeader(header);
 
             const data_buffer = try elements_mod.Element(T).bytesAsSlice(
                 byte_buffer,
-                num_elements,
+                shape.num_elements,
                 header.descr,
             );
 
-            const strides = shape.getStrides();
-
             return Self{
-                .dims = shape.dims,
-                .strides = strides,
+                .shape = shape,
                 .data_ptr = data_buffer.ptr,
-                .num_elements = num_elements,
             };
         }
 
@@ -197,12 +178,12 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
             var offset: isize = 0;
 
             inline for (0..rank) |i| {
-                if (index[i] >= self.dims[i]) {
+                if (index[i] >= self.shape.dims[i]) {
                     // Index out of bounds
                     return null;
                 }
                 // SAFETY: This cast is safe due to the bounds check above (dim fits in isize and idx < dim)
-                offset += @as(isize, @intCast(index[i])) * self.strides[i];
+                offset += @as(isize, @intCast(index[i])) * self.shape.strides[i];
             }
             return offset;
         }
