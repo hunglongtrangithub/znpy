@@ -341,27 +341,27 @@ pub const Header = struct {
 
         // Build shape string
         var shape_str = std.ArrayList(u8).empty;
-        errdefer shape_str.deinit();
+        defer shape_str.deinit(allocator);
 
-        try shape_str.append("(");
-        switch (shape_str.items.len) {
+        try shape_str.appendSlice(allocator, "(");
+        switch (self.shape.len) {
             0 => {
-                try shape_str.appendSlice(",)");
+                try shape_str.appendSlice(allocator, ",)");
             },
             1 => {
-                const closing_str = try std.fmt.allocPrint(allocator, "{},)", .{self.shape[0]});
+                const closing_str = try std.fmt.allocPrint(allocator, "{d},)", .{self.shape[0]});
                 defer allocator.free(closing_str);
-                try shape_str.appendSlice(closing_str);
+                try shape_str.appendSlice(allocator, closing_str);
             },
             else => {
-                for (0..shape_str.items.len - 1) |idx| {
-                    const element_str = try std.fmt.allocPrint(allocator, "{}, ", .{self.shape[idx]});
+                for (0..self.shape.len - 1) |idx| {
+                    const element_str = try std.fmt.allocPrint(allocator, "{d}, ", .{self.shape[idx]});
                     defer allocator.free(element_str);
-                    try shape_str.appendSlice(element_str);
+                    try shape_str.appendSlice(allocator, element_str);
                 }
-                const closing_str = try std.fmt.allocPrint(allocator, "{})", .{self.shape[shape_str.items.len - 1]});
+                const closing_str = try std.fmt.allocPrint(allocator, "{d})", .{self.shape[self.shape.len - 1]});
                 defer allocator.free(closing_str);
-                try shape_str.appendSlice(closing_str);
+                try shape_str.appendSlice(allocator, closing_str);
             },
         }
 
@@ -373,7 +373,7 @@ pub const Header = struct {
 
         const header_str = try std.fmt.allocPrint(
             allocator,
-            "{{'descr': '{}', 'fortran_order': {}, 'shape': {}, }}",
+            "{{'descr': '{s}', 'fortran_order': {s}, 'shape': {s}, }}",
             .{ descr_str, fortran_order_str, shape_str.items },
         );
 
@@ -389,4 +389,21 @@ test {
     _ = parse;
     _ = descr;
     _ = lex;
+}
+
+test "Header.toPythonString" {
+    var allocator = std.testing.allocator;
+
+    const shape_data = [_]usize{ 3, 4, 5 };
+    const header = Header{
+        .shape = shape_data[0..],
+        .descr = ElementType.fromString("<i4") catch unreachable,
+        .order = .C,
+    };
+
+    const header_str = try header.toPythonString(allocator);
+    defer allocator.free(header_str);
+
+    const expected_str = "{'descr': '<i4', 'fortran_order': False, 'shape': (3, 4, 5), }";
+    try std.testing.expectEqualSlices(u8, expected_str, header_str);
 }

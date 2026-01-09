@@ -97,51 +97,51 @@ pub const ElementType = union(enum) {
         return switch (self) {
             .Bool => "|b1",
             .Int8 => "|i1",
-            .Int16 => switch (self.Int16) {
-                null => "=i2",
-                else => if (self.Int16 == .little) "<i2" else ">i2",
-            },
-            .Int32 => switch (self.Int32) {
-                null => "=i4",
-                else => if (self.Int32 == .little) "<i4" else ">i4",
-            },
-            .Int64 => switch (self.Int64) {
-                null => "=i8",
-                else => if (self.Int64 == .little) "<i8" else ">i8",
-            },
+            .Int16 => |e| if (e) |endian| switch (endian) {
+                .little => "<i2",
+                .big => ">i2",
+            } else "=i2",
+            .Int32 => |e| if (e) |endian| switch (endian) {
+                .little => "<i4",
+                .big => ">i4",
+            } else "=i4",
+            .Int64 => |e| if (e) |endian| switch (endian) {
+                .little => "<i8",
+                .big => ">i8",
+            } else "=i8",
             .UInt8 => "|u1",
-            .UInt16 => switch (self.UInt16) {
-                null => "=u2",
-                else => if (self.UInt16 == .little) "<u2" else ">u2",
-            },
-            .UInt32 => switch (self.UInt32) {
-                null => "=u4",
-                else => if (self.UInt32 == .little) "<u4" else ">u4",
-            },
-            .UInt64 => switch (self.UInt64) {
-                null => "=u8",
-                else => if (self.UInt64 == .little) "<u8" else ">u8",
-            },
-            .Float32 => switch (self.Float32) {
-                null => "=f4",
-                else => if (self.Float32 == .little) "<f4" else ">f4",
-            },
-            .Float64 => switch (self.Float64) {
-                null => "=f8",
-                else => if (self.Float64 == .little) "<f8" else ">f8",
-            },
-            .Float128 => switch (self.Float128) {
-                null => "=f16",
-                else => if (self.Float128 == .little) "<f16" else ">f16",
-            },
-            .Complex64 => switch (self.Complex64) {
-                null => "=c8",
-                else => if (self.Complex64 == .little) "<c8" else ">c8",
-            },
-            .Complex128 => switch (self.Complex128) {
-                null => "=c16",
-                else => if (self.Complex128 == .little) "<c16" else ">c16",
-            },
+            .UInt16 => |e| if (e) |endian| switch (endian) {
+                .little => "<u2",
+                .big => ">u2",
+            } else "=u2",
+            .UInt32 => |e| if (e) |endian| switch (endian) {
+                .little => "<u4",
+                .big => ">u4",
+            } else "=u4",
+            .UInt64 => |e| if (e) |endian| switch (endian) {
+                .little => "<u8",
+                .big => ">u8",
+            } else "=u8",
+            .Float32 => |e| if (e) |endian| switch (endian) {
+                .little => "<f4",
+                .big => ">f4",
+            } else "=f4",
+            .Float64 => |e| if (e) |endian| switch (endian) {
+                .little => "<f8",
+                .big => ">f8",
+            } else "=f8",
+            .Float128 => |e| if (e) |endian| switch (endian) {
+                .little => "<f16",
+                .big => ">f16",
+            } else "=f16",
+            .Complex64 => |e| if (e) |endian| switch (endian) {
+                .little => "<c8",
+                .big => ">c8",
+            } else "=c8",
+            .Complex128 => |e| if (e) |endian| switch (endian) {
+                .little => "<c16",
+                .big => ">c16",
+            } else "=c16",
         };
     }
 
