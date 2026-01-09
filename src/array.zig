@@ -55,7 +55,7 @@ pub fn ArrayView(comptime T: type, comptime Rank: ?usize, comptime mutable: bool
                 try shape.getStrides(allocator);
 
             return Self{
-                // shape.dims (if dynamic) is allocated by the allocator, so we can just store the pointer here
+                // In dynamic case, shape.dims (from header.shape) is allocated by the allocator, so we can just store the pointer here
                 .dims = shape.dims,
                 .strides = strides,
                 .data_ptr = data_buffer.ptr,

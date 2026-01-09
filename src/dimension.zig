@@ -83,7 +83,7 @@ pub fn Shape(comptime Rank: ?usize) type {
         /// 2. Fit in isize without overflow
         pub fn getStrides(
             self: *const Self,
-            // If static, this arg is 'void' (takes {}). If dynamic, it's 'Allocator'.
+            // If static, this arg is 'void'. If dynamic, it's 'Allocator'.
             allocator: if (Rank == null) std.mem.Allocator else void,
         ) if (Rank == null) std.mem.Allocator.Error!StridesType else StridesType {
             var strides: StridesType = if (Rank) |R|
