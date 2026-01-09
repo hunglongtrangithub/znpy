@@ -45,7 +45,7 @@ pub fn Shape(comptime Rank: ?usize) type {
 
         pub const StridesType = if (Rank) |R| [R]isize else []isize;
 
-        /// Create a Shape from a numpy header.
+        /// Create a `Shape` from a numpy header.
         /// Returns an error if the shape's total size in bytes overflows isize,
         /// or if the number of dimensions does not match the expected Rank (if static).
         /// On success, also returns the total number of elements.

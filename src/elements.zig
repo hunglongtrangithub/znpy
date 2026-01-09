@@ -37,7 +37,14 @@ pub fn Element(comptime T: type) type {
         const Self = @This();
 
         /// Interprets a byte slice as a slice of the specified element type `T`.
-        pub fn bytesAsSlice(bytes: []u8, len: usize, type_descr: header.ElementType) ViewDataError![]T {
+        /// The function checks for type compatibility, endianness, length, and alignment.
+        /// - `comptime mutable`: If true, returns a mutable slice; otherwise, returns a const slice.
+        pub fn bytesAsSlice(
+            comptime mutable: bool,
+            bytes: if (mutable) []u8 else []const u8,
+            len: usize,
+            type_descr: header.ElementType,
+        ) ViewDataError!(if (mutable) []T else []const T) {
             // Element types must match
             if (std.meta.activeTag(type_descr) != std.meta.activeTag(element_type)) {
                 return ViewDataError.TypeMismatch;
@@ -92,7 +99,7 @@ pub fn Element(comptime T: type) type {
             // Both length and alignment checks passed, we can:
 
             // 1. Now upgrade the alignment in the type system.
-            const aligned_bytes = @as([]align(@alignOf(T)) u8, @alignCast(bytes));
+            const aligned_bytes = @as(if (mutable) []align(@alignOf(T)) u8 else []align(@alignOf(T)) const u8, @alignCast(bytes));
 
             // 2. Now bytesAsSlice will be happy because the input is []align(T) const u8
             return std.mem.bytesAsSlice(T, aligned_bytes);
@@ -125,7 +132,7 @@ fn oppositeEndian(endian: std.builtin.Endian) std.builtin.Endian {
 
 test "bytesAsSlice - Bool with null endian, valid data" {
     var bytes = [_]u8{ 0, 1, 1, 0, 1 };
-    const result = try Element(bool).bytesAsSlice(&bytes, 5, .Bool);
+    const result = try Element(bool).bytesAsSlice(false, &bytes, 5, .Bool);
     try std.testing.expectEqual(5, result.len);
     try std.testing.expectEqual(false, result[0]);
     try std.testing.expectEqual(true, result[1]);
@@ -136,7 +143,7 @@ test "bytesAsSlice - Bool with null endian, valid data" {
 
 test "bytesAsSlice - Int8 with null endian" {
     var bytes = [_]u8{ 0, 127, 255, 128, 1 };
-    const result = try Element(i8).bytesAsSlice(&bytes, 5, .Int8);
+    const result = try Element(i8).bytesAsSlice(false, &bytes, 5, .Int8);
     try std.testing.expectEqual(5, result.len);
     try std.testing.expectEqual(@as(i8, 0), result[0]);
     try std.testing.expectEqual(@as(i8, 127), result[1]);
@@ -147,7 +154,7 @@ test "bytesAsSlice - Int8 with null endian" {
 
 test "bytesAsSlice - UInt8 with null endian" {
     var bytes = [_]u8{ 0, 127, 255, 128, 1 };
-    const result = try Element(u8).bytesAsSlice(&bytes, 5, .UInt8);
+    const result = try Element(u8).bytesAsSlice(false, &bytes, 5, .UInt8);
     try std.testing.expectEqual(5, result.len);
     try std.testing.expectEqual(@as(u8, 0), result[0]);
     try std.testing.expectEqual(@as(u8, 127), result[1]);
@@ -158,7 +165,7 @@ test "bytesAsSlice - UInt8 with null endian" {
 
 test "bytesAsSlice - Int16 with null endian" {
     var bytes align(@alignOf(i16)) = [_]u8{ 0, 0, 1, 0, 255, 255 };
-    const result = try Element(i16).bytesAsSlice(&bytes, 3, .{ .Int16 = null });
+    const result = try Element(i16).bytesAsSlice(false, &bytes, 3, .{ .Int16 = null });
     try std.testing.expectEqual(3, result.len);
     try std.testing.expectEqual(@as(i16, 0), result[0]);
     try std.testing.expectEqual(@as(i16, if (native_endian == .little) 1 else 256), result[1]);
@@ -167,7 +174,7 @@ test "bytesAsSlice - Int16 with null endian" {
 
 test "bytesAsSlice - Int32 with null endian" {
     var bytes align(@alignOf(i32)) = [_]u8{ 0, 0, 0, 0, 1, 0, 0, 0 };
-    const result = try Element(i32).bytesAsSlice(&bytes, 2, .{ .Int32 = null });
+    const result = try Element(i32).bytesAsSlice(false, &bytes, 2, .{ .Int32 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(i32, 0), result[0]);
     try std.testing.expectEqual(@as(i32, if (native_endian == .little) 1 else 0x40), result[1]);
@@ -175,7 +182,7 @@ test "bytesAsSlice - Int32 with null endian" {
 
 test "bytesAsSlice - Int64 with null endian" {
     var bytes align(@alignOf(i64)) = [_]u8{ 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255 };
-    const result = try Element(i64).bytesAsSlice(&bytes, 2, .{ .Int64 = null });
+    const result = try Element(i64).bytesAsSlice(false, &bytes, 2, .{ .Int64 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(i64, 0), result[0]);
     try std.testing.expectEqual(@as(i64, -1), result[1]);
@@ -183,7 +190,7 @@ test "bytesAsSlice - Int64 with null endian" {
 
 test "bytesAsSlice - UInt16 with null endian" {
     var bytes align(@alignOf(u16)) = [_]u8{ 0, 0, 255, 255 };
-    const result = try Element(u16).bytesAsSlice(&bytes, 2, .{ .UInt16 = null });
+    const result = try Element(u16).bytesAsSlice(false, &bytes, 2, .{ .UInt16 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(u16, 0), result[0]);
     try std.testing.expectEqual(@as(u16, 0xFF_FF), result[1]);
@@ -191,7 +198,7 @@ test "bytesAsSlice - UInt16 with null endian" {
 
 test "bytesAsSlice - UInt32 with null endian" {
     var bytes align(@alignOf(u32)) = [_]u8{ 0, 0, 0, 0, 255, 255, 255, 255 };
-    const result = try Element(u32).bytesAsSlice(&bytes, 2, .{ .UInt32 = null });
+    const result = try Element(u32).bytesAsSlice(false, &bytes, 2, .{ .UInt32 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(u32, 0), result[0]);
     try std.testing.expectEqual(@as(u32, 0xFFFF_FFFF), result[1]);
@@ -199,7 +206,7 @@ test "bytesAsSlice - UInt32 with null endian" {
 
 test "bytesAsSlice - UInt64 with null endian" {
     var bytes align(@alignOf(u64)) = [_]u8{ 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255 };
-    const result = try Element(u64).bytesAsSlice(&bytes, 2, .{ .UInt64 = null });
+    const result = try Element(u64).bytesAsSlice(false, &bytes, 2, .{ .UInt64 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(u64, 0), result[0]);
     try std.testing.expectEqual(@as(u64, 0xFFFF_FFFF_FFFF_FFFF), result[1]);
@@ -210,7 +217,7 @@ test "bytesAsSlice - Float32 with null endian" {
     // 0.0 and 1.0 in IEEE 754 binary32 format (native endian)
     std.mem.writeInt(u32, bytes[0..4], @as(u32, @bitCast(@as(f32, 0.0))), native_endian);
     std.mem.writeInt(u32, bytes[4..8], @as(u32, @bitCast(@as(f32, 1.0))), native_endian);
-    const result = try Element(f32).bytesAsSlice(&bytes, 2, .{ .Float32 = null });
+    const result = try Element(f32).bytesAsSlice(false, &bytes, 2, .{ .Float32 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(f32, 0.0), result[0]);
     try std.testing.expectEqual(@as(f32, 1.0), result[1]);
@@ -220,7 +227,7 @@ test "bytesAsSlice - Float64 with null endian" {
     var bytes align(@alignOf(f64)) = [_]u8{0} ** 16;
     std.mem.writeInt(u64, bytes[0..8], @as(u64, @bitCast(@as(f64, 0.0))), native_endian);
     std.mem.writeInt(u64, bytes[8..16], @as(u64, @bitCast(@as(f64, 3.14159))), native_endian);
-    const result = try Element(f64).bytesAsSlice(&bytes, 2, .{ .Float64 = null });
+    const result = try Element(f64).bytesAsSlice(false, &bytes, 2, .{ .Float64 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(f64, 0.0), result[0]);
     try std.testing.expectApproxEqRel(@as(f64, 3.14159), result[1], 0.00001);
@@ -230,7 +237,7 @@ test "bytesAsSlice - Float128 with null endian" {
     var bytes align(@alignOf(f128)) = [_]u8{0} ** 32;
     std.mem.writeInt(u128, bytes[0..16], @as(u128, @bitCast(@as(f128, 0.0))), native_endian);
     std.mem.writeInt(u128, bytes[16..32], @as(u128, @bitCast(@as(f128, 1.0))), native_endian);
-    const result = try Element(f128).bytesAsSlice(&bytes, 2, .{ .Float128 = null });
+    const result = try Element(f128).bytesAsSlice(false, &bytes, 2, .{ .Float128 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(f128, 0.0), result[0]);
     try std.testing.expectEqual(@as(f128, 1.0), result[1]);
@@ -243,7 +250,7 @@ test "bytesAsSlice - Complex64 with null endian" {
     std.mem.writeInt(u32, bytes[4..8], @as(u32, @bitCast(@as(f32, 2.0))), native_endian); // imag part
     std.mem.writeInt(u32, bytes[8..12], @as(u32, @bitCast(@as(f32, 3.0))), native_endian); // real part
     std.mem.writeInt(u32, bytes[12..16], @as(u32, @bitCast(@as(f32, 4.0))), native_endian); // imag part
-    const result = try Element(std.math.Complex(f32)).bytesAsSlice(&bytes, 2, .{ .Complex64 = null });
+    const result = try Element(std.math.Complex(f32)).bytesAsSlice(true, &bytes, 2, .{ .Complex64 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(f32, 1.0), result[0].re);
     try std.testing.expectEqual(@as(f32, 2.0), result[0].im);
@@ -257,7 +264,7 @@ test "bytesAsSlice - Complex128 with null endian" {
     std.mem.writeInt(u64, bytes[8..16], @as(u64, @bitCast(@as(f64, 2.5))), native_endian);
     std.mem.writeInt(u64, bytes[16..24], @as(u64, @bitCast(@as(f64, 3.5))), native_endian);
     std.mem.writeInt(u64, bytes[24..32], @as(u64, @bitCast(@as(f64, 4.5))), native_endian);
-    const result = try Element(std.math.Complex(f64)).bytesAsSlice(&bytes, 2, .{ .Complex128 = null });
+    const result = try Element(std.math.Complex(f64)).bytesAsSlice(true, &bytes, 2, .{ .Complex128 = null });
     try std.testing.expectEqual(2, result.len);
     try std.testing.expectEqual(@as(f64, 1.5), result[0].re);
     try std.testing.expectEqual(@as(f64, 2.5), result[0].im);
@@ -267,44 +274,44 @@ test "bytesAsSlice - Complex128 with null endian" {
 
 test "bytesAsSlice - Int16 with explicit native endian" {
     var bytes align(@alignOf(i16)) = [_]u8{ 1, 0, 2, 0 };
-    const result = try Element(i16).bytesAsSlice(&bytes, 2, .{ .Int16 = native_endian });
+    const result = try Element(i16).bytesAsSlice(false, &bytes, 2, .{ .Int16 = native_endian });
     try std.testing.expectEqual(2, result.len);
 }
 
 test "bytesAsSlice - Int32 with explicit native endian" {
     var bytes align(@alignOf(i32)) = [_]u8{ 1, 0, 0, 0, 2, 0, 0, 0 };
-    const result = try Element(i32).bytesAsSlice(&bytes, 2, .{ .Int32 = native_endian });
+    const result = try Element(i32).bytesAsSlice(false, &bytes, 2, .{ .Int32 = native_endian });
     try std.testing.expectEqual(2, result.len);
 }
 
 test "bytesAsSlice - Int64 with explicit native endian" {
     var bytes align(@alignOf(i64)) = [_]u8{0} ** 16;
-    const result = try Element(i64).bytesAsSlice(&bytes, 2, .{ .Int64 = native_endian });
+    const result = try Element(i64).bytesAsSlice(false, &bytes, 2, .{ .Int64 = native_endian });
     try std.testing.expectEqual(2, result.len);
 }
 
 test "bytesAsSlice - UInt16 with explicit native endian" {
     var bytes align(@alignOf(u16)) = [_]u8{ 1, 0, 2, 0 };
-    const result = try Element(u16).bytesAsSlice(&bytes, 2, .{ .UInt16 = native_endian });
+    const result = try Element(u16).bytesAsSlice(false, &bytes, 2, .{ .UInt16 = native_endian });
     try std.testing.expectEqual(2, result.len);
 }
 
 test "bytesAsSlice - UInt32 with explicit native endian" {
     var bytes align(@alignOf(u32)) = [_]u8{ 1, 0, 0, 0 };
-    const result = try Element(u32).bytesAsSlice(&bytes, 1, .{ .UInt32 = native_endian });
+    const result = try Element(u32).bytesAsSlice(false, &bytes, 1, .{ .UInt32 = native_endian });
     try std.testing.expectEqual(1, result.len);
 }
 
 test "bytesAsSlice - UInt64 with explicit native endian" {
     var bytes align(@alignOf(u64)) = [_]u8{0} ** 8;
-    const result = try Element(u64).bytesAsSlice(&bytes, 1, .{ .UInt64 = native_endian });
+    const result = try Element(u64).bytesAsSlice(false, &bytes, 1, .{ .UInt64 = native_endian });
     try std.testing.expectEqual(1, result.len);
 }
 
 test "bytesAsSlice - Float32 with explicit native endian" {
     var bytes align(@alignOf(f32)) = [_]u8{0} ** 4;
     std.mem.writeInt(u32, &bytes, @as(u32, @bitCast(@as(f32, 1.0))), native_endian);
-    const result = try Element(f32).bytesAsSlice(&bytes, 1, .{ .Float32 = native_endian });
+    const result = try Element(f32).bytesAsSlice(false, &bytes, 1, .{ .Float32 = native_endian });
     try std.testing.expectEqual(1, result.len);
     try std.testing.expectEqual(@as(f32, 1.0), result[0]);
 }
@@ -312,7 +319,7 @@ test "bytesAsSlice - Float32 with explicit native endian" {
 test "bytesAsSlice - Float64 with explicit native endian" {
     var bytes align(@alignOf(f64)) = [_]u8{0} ** 8;
     std.mem.writeInt(u64, &bytes, @as(u64, @bitCast(@as(f64, 2.5))), native_endian);
-    const result = try Element(f64).bytesAsSlice(&bytes, 1, .{ .Float64 = native_endian });
+    const result = try Element(f64).bytesAsSlice(false, &bytes, 1, .{ .Float64 = native_endian });
     try std.testing.expectEqual(1, result.len);
     try std.testing.expectEqual(@as(f64, 2.5), result[0]);
 }
@@ -320,7 +327,7 @@ test "bytesAsSlice - Float64 with explicit native endian" {
 test "bytesAsSlice - Float128 with explicit native endian" {
     var bytes align(@alignOf(f128)) = [_]u8{0} ** 16;
     std.mem.writeInt(u128, &bytes, @as(u128, @bitCast(@as(f128, 1.0))), native_endian);
-    const result = try Element(f128).bytesAsSlice(&bytes, 1, .{ .Float128 = native_endian });
+    const result = try Element(f128).bytesAsSlice(false, &bytes, 1, .{ .Float128 = native_endian });
     try std.testing.expectEqual(1, result.len);
     try std.testing.expectEqual(@as(f128, 1.0), result[0]);
 }
@@ -329,7 +336,7 @@ test "bytesAsSlice - Complex64 with explicit native endian" {
     var bytes align(@alignOf(std.math.Complex(f32))) = [_]u8{0} ** 8;
     std.mem.writeInt(u32, bytes[0..4], @as(u32, @bitCast(@as(f32, 1.0))), native_endian);
     std.mem.writeInt(u32, bytes[4..8], @as(u32, @bitCast(@as(f32, 2.0))), native_endian);
-    const result = try Element(std.math.Complex(f32)).bytesAsSlice(&bytes, 1, .{ .Complex64 = native_endian });
+    const result = try Element(std.math.Complex(f32)).bytesAsSlice(true, &bytes, 1, .{ .Complex64 = native_endian });
     try std.testing.expectEqual(1, result.len);
     try std.testing.expectEqual(@as(f32, 1.0), result[0].re);
     try std.testing.expectEqual(@as(f32, 2.0), result[0].im);
@@ -339,7 +346,7 @@ test "bytesAsSlice - Complex128 with explicit native endian" {
     var bytes align(@alignOf(std.math.Complex(f64))) = [_]u8{0} ** 16;
     std.mem.writeInt(u64, bytes[0..8], @as(u64, @bitCast(@as(f64, 3.0))), native_endian);
     std.mem.writeInt(u64, bytes[8..16], @as(u64, @bitCast(@as(f64, 4.0))), native_endian);
-    const result = try Element(std.math.Complex(f64)).bytesAsSlice(&bytes, 1, .{ .Complex128 = native_endian });
+    const result = try Element(std.math.Complex(f64)).bytesAsSlice(true, &bytes, 1, .{ .Complex128 = native_endian });
     try std.testing.expectEqual(1, result.len);
     try std.testing.expectEqual(@as(f64, 3.0), result[0].re);
     try std.testing.expectEqual(@as(f64, 4.0), result[0].im);
@@ -347,115 +354,115 @@ test "bytesAsSlice - Complex128 with explicit native endian" {
 
 test "bytesAsSlice - InvalidBool error" {
     var bytes = [_]u8{ 0, 1, 2, 1, 0 }; // byte with value 2 is invalid
-    const result = Element(bool).bytesAsSlice(&bytes, 5, .Bool);
+    const result = Element(bool).bytesAsSlice(false, &bytes, 5, .Bool);
     try std.testing.expectError(ViewDataError.InvalidBool, result);
 }
 
 test "bytesAsSlice - InvalidBool with 255" {
     var bytes = [_]u8{ 0, 1, 255, 1, 0 };
-    const result = Element(bool).bytesAsSlice(&bytes, 5, .Bool);
+    const result = Element(bool).bytesAsSlice(false, &bytes, 5, .Bool);
     try std.testing.expectError(ViewDataError.InvalidBool, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for Int16" {
     var bytes align(@alignOf(i16)) = [_]u8{ 1, 0 };
-    const result = Element(i16).bytesAsSlice(&bytes, 1, .{ .Int16 = oppositeEndian(native_endian) });
+    const result = Element(i16).bytesAsSlice(false, &bytes, 1, .{ .Int16 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for Int32" {
     var bytes align(@alignOf(i32)) = [_]u8{ 1, 0, 0, 0 };
-    const result = Element(i32).bytesAsSlice(&bytes, 1, .{ .Int32 = oppositeEndian(native_endian) });
+    const result = Element(i32).bytesAsSlice(false, &bytes, 1, .{ .Int32 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for Int64" {
     var bytes align(@alignOf(i64)) = [_]u8{0} ** 8;
-    const result = Element(i64).bytesAsSlice(&bytes, 1, .{ .Int64 = oppositeEndian(native_endian) });
+    const result = Element(i64).bytesAsSlice(false, &bytes, 1, .{ .Int64 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for UInt16" {
     var bytes align(@alignOf(u16)) = [_]u8{ 1, 0 };
-    const result = Element(u16).bytesAsSlice(&bytes, 1, .{ .UInt16 = oppositeEndian(native_endian) });
+    const result = Element(u16).bytesAsSlice(false, &bytes, 1, .{ .UInt16 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for UInt32" {
     var bytes align(@alignOf(u32)) = [_]u8{ 1, 0, 0, 0 };
-    const result = Element(u32).bytesAsSlice(&bytes, 1, .{ .UInt32 = oppositeEndian(native_endian) });
+    const result = Element(u32).bytesAsSlice(false, &bytes, 1, .{ .UInt32 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for UInt64" {
     var bytes align(@alignOf(u64)) = [_]u8{0} ** 8;
-    const result = Element(u64).bytesAsSlice(&bytes, 1, .{ .UInt64 = oppositeEndian(native_endian) });
+    const result = Element(u64).bytesAsSlice(false, &bytes, 1, .{ .UInt64 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for Float32" {
     var bytes align(@alignOf(f32)) = [_]u8{0} ** 4;
-    const result = Element(f32).bytesAsSlice(&bytes, 1, .{ .Float32 = oppositeEndian(native_endian) });
+    const result = Element(f32).bytesAsSlice(false, &bytes, 1, .{ .Float32 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for Float64" {
     var bytes align(@alignOf(f64)) = [_]u8{0} ** 8;
-    const result = Element(f64).bytesAsSlice(&bytes, 1, .{ .Float64 = oppositeEndian(native_endian) });
+    const result = Element(f64).bytesAsSlice(false, &bytes, 1, .{ .Float64 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for Float128" {
     var bytes align(@alignOf(f128)) = [_]u8{0} ** 16;
-    const result = Element(f128).bytesAsSlice(&bytes, 1, .{ .Float128 = oppositeEndian(native_endian) });
+    const result = Element(f128).bytesAsSlice(false, &bytes, 1, .{ .Float128 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for Complex64" {
     var bytes align(@alignOf(std.math.Complex(f32))) = [_]u8{0} ** 8;
-    const result = Element(std.math.Complex(f32)).bytesAsSlice(&bytes, 1, .{ .Complex64 = oppositeEndian(native_endian) });
+    const result = Element(std.math.Complex(f32)).bytesAsSlice(true, &bytes, 1, .{ .Complex64 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - EndiannessMismatch for Complex128" {
     var bytes align(@alignOf(std.math.Complex(f64))) = [_]u8{0} ** 16;
-    const result = Element(std.math.Complex(f64)).bytesAsSlice(&bytes, 1, .{ .Complex128 = oppositeEndian(native_endian) });
+    const result = Element(std.math.Complex(f64)).bytesAsSlice(true, &bytes, 1, .{ .Complex128 = oppositeEndian(native_endian) });
     try std.testing.expectError(ViewDataError.EndiannessMismatch, result);
 }
 
 test "bytesAsSlice - MissingBytes for Bool" {
     var bytes = [_]u8{ 0, 1, 0 };
-    const result = Element(bool).bytesAsSlice(&bytes, 5, .Bool); // Requesting 5, only 3 available
+    const result = Element(bool).bytesAsSlice(false, &bytes, 5, .Bool); // Requesting 5, only 3 available
     try std.testing.expectError(ViewDataError.MissingBytes, result);
 }
 
 test "bytesAsSlice - MissingBytes for Int32" {
     var bytes align(@alignOf(i32)) = [_]u8{ 0, 0, 0, 0, 1, 1 };
-    const result = Element(i32).bytesAsSlice(&bytes, 2, .{ .Int32 = null }); // Requesting 2*4=8 bytes, only 6 available
+    const result = Element(i32).bytesAsSlice(false, &bytes, 2, .{ .Int32 = null }); // Requesting 2*4=8 bytes, only 6 available
     try std.testing.expectError(ViewDataError.MissingBytes, result);
 }
 
 test "bytesAsSlice - MissingBytes for Float64" {
     var bytes align(@alignOf(f64)) = [_]u8{0} ** 7;
-    const result = Element(f64).bytesAsSlice(&bytes, 1, .{ .Float64 = null }); // Requesting 8 bytes, only 7 available
+    const result = Element(f64).bytesAsSlice(false, &bytes, 1, .{ .Float64 = null }); // Requesting 8 bytes, only 7 available
     try std.testing.expectError(ViewDataError.MissingBytes, result);
 }
 
 test "bytesAsSlice - ExtraBytes for Bool" {
     var bytes = [_]u8{ 0, 1, 0, 1, 0 };
-    const result = Element(bool).bytesAsSlice(&bytes, 3, .Bool); // Only need 3, have 5
+    const result = Element(bool).bytesAsSlice(false, &bytes, 3, .Bool); // Only need 3, have 5
     try std.testing.expectError(ViewDataError.ExtraBytes, result);
 }
 
 test "bytesAsSlice - ExtraBytes for Int16" {
     var bytes align(@alignOf(i16)) = [_]u8{ 0, 0, 1, 0, 2, 0 };
-    const result = Element(i16).bytesAsSlice(&bytes, 2, .{ .Int16 = null }); // Need 4 bytes, have 6
+    const result = Element(i16).bytesAsSlice(false, &bytes, 2, .{ .Int16 = null }); // Need 4 bytes, have 6
     try std.testing.expectError(ViewDataError.ExtraBytes, result);
 }
 
 test "bytesAsSlice - ExtraBytes for Float32" {
     var bytes align(@alignOf(f32)) = [_]u8{0} ** 8;
-    const result = Element(f32).bytesAsSlice(&bytes, 1, .{ .Float32 = null }); // Need 4 bytes, have 8
+    const result = Element(f32).bytesAsSlice(false, &bytes, 1, .{ .Float32 = null }); // Need 4 bytes, have 8
     try std.testing.expectError(ViewDataError.ExtraBytes, result);
 }
 
@@ -463,37 +470,37 @@ test "bytesAsSlice - LengthOverflow" {
     var bytes = [_]u8{0};
     // Try to allocate max usize elements of u64, which should overflow
     const huge_len = std.math.maxInt(usize);
-    const result = Element(u64).bytesAsSlice(&bytes, huge_len, .{ .UInt64 = null });
+    const result = Element(u64).bytesAsSlice(false, &bytes, huge_len, .{ .UInt64 = null });
     try std.testing.expectError(ViewDataError.LengthOverflow, result);
 }
 
 test "bytesAsSlice - zero-length bytes with non-zero len" {
     var bytes = [_]u8{};
-    const result = Element(bool).bytesAsSlice(&bytes, 1, .Bool);
+    const result = Element(bool).bytesAsSlice(false, &bytes, 1, .Bool);
     try std.testing.expectError(ViewDataError.MissingBytes, result);
 }
 
 test "bytesAsSlice - zero len with non-empty bytes for Bool" {
     var bytes = [_]u8{ 0, 1 };
-    const result = Element(bool).bytesAsSlice(&bytes, 0, .Bool);
+    const result = Element(bool).bytesAsSlice(false, &bytes, 0, .Bool);
     try std.testing.expectError(ViewDataError.ExtraBytes, result);
 }
 
 test "bytesAsSlice - zero len with non-empty bytes for Int32" {
     var bytes align(@alignOf(i32)) = [_]u8{ 0, 0, 0, 0 };
-    const result = Element(i32).bytesAsSlice(&bytes, 0, .{ .Int32 = null });
+    const result = Element(i32).bytesAsSlice(false, &bytes, 0, .{ .Int32 = null });
     try std.testing.expectError(ViewDataError.ExtraBytes, result);
 }
 
 test "bytesAsSlice - zero len with empty bytes returns empty slice" {
     var bytes = [_]u8{};
-    const result = try Element(bool).bytesAsSlice(&bytes, 0, .Bool);
+    const result = try Element(bool).bytesAsSlice(false, &bytes, 0, .Bool);
     try std.testing.expectEqual(0, result.len);
 }
 
 test "bytesAsSlice - zero len with empty bytes for Int32" {
     var bytes = [_]u8{};
-    const result = try Element(i32).bytesAsSlice(&bytes, 0, .{ .Int32 = null });
+    const result = try Element(i32).bytesAsSlice(false, &bytes, 0, .{ .Int32 = null });
     try std.testing.expectEqual(0, result.len);
 }
 
@@ -501,66 +508,66 @@ test "bytesAsSlice - Misaligned bytes for Int16" {
     // Create misaligned buffer
     var buffer align(@alignOf(i16)) = [_]u8{0} ** 5;
     const misaligned_slice = buffer[1..3]; // This should be misaligned for i16
-    const result = Element(i16).bytesAsSlice(misaligned_slice, 1, .{ .Int16 = null });
+    const result = Element(i16).bytesAsSlice(false, misaligned_slice, 1, .{ .Int16 = null });
     try std.testing.expectError(ViewDataError.Misaligned, result);
 }
 
 test "bytesAsSlice - Misaligned bytes for Int32" {
     var buffer align(@alignOf(i32)) = [_]u8{0} ** 7;
     const misaligned_slice = buffer[1..5];
-    const result = Element(i32).bytesAsSlice(misaligned_slice, 1, .{ .Int32 = null });
+    const result = Element(i32).bytesAsSlice(false, misaligned_slice, 1, .{ .Int32 = null });
     try std.testing.expectError(ViewDataError.Misaligned, result);
 }
 
 test "bytesAsSlice - Misaligned bytes for Int64" {
     var buffer align(@alignOf(i64)) = [_]u8{0} ** 12;
     const misaligned_slice = buffer[1..9];
-    const result = Element(i64).bytesAsSlice(misaligned_slice, 1, .{ .Int64 = null });
+    const result = Element(i64).bytesAsSlice(false, misaligned_slice, 1, .{ .Int64 = null });
     try std.testing.expectError(ViewDataError.Misaligned, result);
 }
 
 test "bytesAsSlice - Misaligned bytes for Float32" {
     var buffer align(@alignOf(f32)) = [_]u8{0} ** 7;
     const misaligned_slice = buffer[1..5];
-    const result = Element(f32).bytesAsSlice(misaligned_slice, 1, .{ .Float32 = null });
+    const result = Element(f32).bytesAsSlice(false, misaligned_slice, 1, .{ .Float32 = null });
     try std.testing.expectError(ViewDataError.Misaligned, result);
 }
 
 test "bytesAsSlice - Misaligned bytes for Float64" {
     var buffer align(@alignOf(f64)) = [_]u8{0} ** 12;
     const misaligned_slice = buffer[1..9];
-    const result = Element(f64).bytesAsSlice(misaligned_slice, 1, .{ .Float64 = null });
+    const result = Element(f64).bytesAsSlice(false, misaligned_slice, 1, .{ .Float64 = null });
     try std.testing.expectError(ViewDataError.Misaligned, result);
 }
 
 test "bytesAsSlice - Misaligned bytes for Complex64" {
     var buffer align(@alignOf(std.math.Complex(f32))) = [_]u8{0} ** 12;
     const misaligned_slice = buffer[1..9];
-    const result = Element(std.math.Complex(f32)).bytesAsSlice(misaligned_slice, 1, .{ .Complex64 = null });
+    const result = Element(std.math.Complex(f32)).bytesAsSlice(true, misaligned_slice, 1, .{ .Complex64 = null });
     try std.testing.expectError(ViewDataError.Misaligned, result);
 }
 
 test "bytesAsSlice - Misaligned bytes for Complex128" {
     var buffer align(@alignOf(std.math.Complex(f64))) = [_]u8{0} ** 20;
     const misaligned_slice = buffer[1..17];
-    const result = Element(std.math.Complex(f64)).bytesAsSlice(misaligned_slice, 1, .{ .Complex128 = null });
+    const result = Element(std.math.Complex(f64)).bytesAsSlice(true, misaligned_slice, 1, .{ .Complex128 = null });
     try std.testing.expectError(ViewDataError.Misaligned, result);
 }
 
 test "bytesAsSlice - TypeMismatch Bool vs Int8" {
     var bytes = [_]u8{ 0, 1, 0 };
-    const result = Element(bool).bytesAsSlice(&bytes, 3, .Int8);
+    const result = Element(bool).bytesAsSlice(false, &bytes, 3, .Int8);
     try std.testing.expectError(ViewDataError.TypeMismatch, result);
 }
 
 test "bytesAsSlice - TypeMismatch Int32 vs Float32" {
     var bytes align(@alignOf(i32)) = [_]u8{ 0, 0, 0, 0 };
-    const result = Element(i32).bytesAsSlice(&bytes, 1, .{ .Float32 = null });
+    const result = Element(i32).bytesAsSlice(false, &bytes, 1, .{ .Float32 = null });
     try std.testing.expectError(ViewDataError.TypeMismatch, result);
 }
 
 test "bytesAsSlice - TypeMismatch UInt64 vs Int64" {
     var bytes align(@alignOf(u64)) = [_]u8{0} ** 8;
-    const result = Element(u64).bytesAsSlice(&bytes, 1, .{ .Int64 = null });
+    const result = Element(u64).bytesAsSlice(false, &bytes, 1, .{ .Int64 = null });
     try std.testing.expectError(ViewDataError.TypeMismatch, result);
 }

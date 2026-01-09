@@ -9,14 +9,15 @@ const elements = @import("elements.zig");
 ///
 /// `T` is the element type.
 /// `Rank` is the number of dimensions, or `null` for dynamic rank.
-pub fn ArrayView(comptime T: type, comptime Rank: ?usize) type {
+/// `mutable` indicates whether the view allows mutable access to the data.
+pub fn ArrayView(comptime T: type, comptime Rank: ?usize, comptime mutable: bool) type {
     return struct {
         /// The dimensions of the array.
         dims: if (Rank) |R| [R]usize else []const usize,
         /// The strides of the array. Always the same length as `dims`.
         strides: if (Rank) |R| [R]isize else []const isize,
         /// This pointer always points to "Logical Index 0" of the array.
-        data_ptr: [*]T,
+        data_ptr: if (mutable) [*]T else [*]const T,
 
         const Self = @This();
 
@@ -24,7 +25,12 @@ pub fn ArrayView(comptime T: type, comptime Rank: ?usize) type {
 
         pub const FromFileBufferError = npy_header.ReadHeaderError || dimension.Shape(Rank).FromHeaderError || elements.ViewDataError;
 
-        pub fn fromFileBuffer(file_buffer: []u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
+        pub fn fromFileBuffer(
+            // If mutable is true, we REQUIRE []u8 (writeable).
+            // If mutable is false, we accept []const u8 (read-only).
+            file_buffer: if (mutable) []u8 else []const u8,
+            allocator: std.mem.Allocator,
+        ) FromFileBufferError!Self {
             var slice_reader = npy_header.SliceReader.init(file_buffer);
 
             // We don't need to defer header.deinit here since we need header.shape to be stored in the Array struct
@@ -35,12 +41,18 @@ pub fn ArrayView(comptime T: type, comptime Rank: ?usize) type {
             const shape, const num_elements = try dimension.Shape(Rank).fromHeader(header);
 
             const data_buffer = try elements.Element(T).bytesAsSlice(
+                mutable,
                 byte_buffer,
                 num_elements,
                 header.descr,
             );
 
-            const strides = try shape.getStrides(allocator);
+            const strides = if (Rank) |_|
+                // Static rank. Strides is an array on the stack.
+                shape.getStrides({})
+            else
+                // Dynamic rank. Strides is a slice allocated on the heap.
+                try shape.getStrides(allocator);
 
             return Self{
                 // shape.dims (if dynamic) is allocated by the allocator, so we can just store the pointer here
@@ -99,7 +111,7 @@ pub fn ArrayView(comptime T: type, comptime Rank: ?usize) type {
         }
 
         /// Get a pointer to the element at the given multi-dimensional index.
-        pub fn at(self: *const Self, index: IndexType) ?*T {
+        pub fn at(self: *const Self, index: IndexType) ?(if (mutable) *T else *const T) {
             const offset = self.strideOffset(index) orelse return null;
 
             // 1. Get the base address as an integer
@@ -117,11 +129,21 @@ pub fn ArrayView(comptime T: type, comptime Rank: ?usize) type {
             // 4. Return the resulting pointer
             return @ptrFromInt(target_addr);
         }
+
+        /// Set the element at the given multi-dimensional index.
+        /// Only available if the view was initialized with mutable = true.
+        pub fn set(self: *const Self, index: IndexType, value: T) ?void {
+            if (comptime !mutable) {
+                @compileError("Cannot call set on an immutable ArrayView. Use mutable = true.");
+            }
+            const ptr = self.at(index) orelse return null;
+            ptr.* = value;
+        }
     };
 }
 
 fn StaticArrayView(comptime T: type, comptime Rank: usize) type {
-    return ArrayView(T, Rank);
+    return ArrayView(T, Rank, true);
 }
 
 test "StaticArrayView(f64, 2) - basic 2D array" {

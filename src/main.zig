@@ -32,7 +32,7 @@ fn processNpyFile(file: std.fs.File) !void {
     var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
     const allocator = fallback.get();
 
-    const ArrayView = znpy.ArrayView(i16, null);
+    const ArrayView = znpy.ArrayView(i16, 3, false);
 
     var array_view: ArrayView = ArrayView.fromFileBuffer(file_buffer, allocator) catch |e| {
         std.debug.print("Failed to create ArrayView from file buffer: {}\n", .{e});
@@ -45,8 +45,8 @@ fn processNpyFile(file: std.fs.File) !void {
     for (0..array_view.dims[0]) |i| {
         for (0..array_view.dims[1]) |j| {
             for (0..array_view.dims[2]) |k| {
-                const value = array_view.at(&[3]usize{ i, j, k }).?.*;
-                std.debug.print("Element at ({}, {}, {}) = {}\n", .{ i, j, k, value });
+                const value: *const i16 = array_view.at([3]usize{ i, j, k }).?;
+                std.debug.print("Element at ({}, {}, {}) = {}\n", .{ i, j, k, value.* });
             }
         }
     }
