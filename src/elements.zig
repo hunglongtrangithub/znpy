@@ -34,8 +34,6 @@ pub fn Element(comptime T: type) type {
     const element_type = header.ElementType.fromZigType(T) catch @compileError("Unsupported type");
 
     return struct {
-        value: T,
-
         const Self = @This();
 
         /// Interprets a byte slice as a slice of the specified element type `T`.

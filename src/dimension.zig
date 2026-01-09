@@ -24,92 +24,18 @@ pub fn shapeSizeChecked(T: header.ElementType, shape: []const usize) ?usize {
     return num_elements;
 }
 
-/// A multi-dimensional shape of an array, with a dynamic number of dimensions.
-pub const DynamicShape = struct {
-    /// The size of each dimension. The slice is owned by the caller.
-    /// The total number of elements is the product of all dimensions,
-    /// which must not overflow `std.math.maxInt(isize)`.
-    dims: []const usize,
-    /// The memory order of the array.
-    order: header.Order,
-
-    const Self = @This();
-
-    pub const FromHeaderError = error{ShapeSizeOverflow};
-
-    /// Create a Shape from a numpy header.
-    /// Returns an error if the shape's total size in bytes overflows isize.
-    /// On success, also returns the total number of elements.
-    pub fn fromHeader(npy_header: header.Header) FromHeaderError!struct { Self, usize } {
-        // Check that the shape length fits in isize
-        const num_elements = shapeSizeChecked(npy_header.descr, npy_header.shape) orelse {
-            return error.ShapeSizeOverflow;
-        };
-        return .{ Self{
-            .dims = npy_header.shape,
-            .order = npy_header.order,
-        }, num_elements };
-    }
-
-    /// Compute the strides for this shape, allocating the result using the given allocator.
-    /// Strides slice has the same length as the number of dimensions in the shape.
-    ///
-    /// **Invariant**: For any valid multi-dimensional index (where `0 <= indices[i] < dims[i]` for all `i`),
-    /// the offset calculation `Σ(indices[i] * strides[i])` is guaranteed to:
-    /// 1. Be less than the total number of elements in the shape
-    /// 2. Fit in isize without overflow
-    pub fn getStrides(self: *const Self, allocator: std.mem.Allocator) std.mem.Allocator.Error![]const isize {
-        if (self.dims.len == 0) {
-            // Scalar case: no dimensions, no strides
-            return &[_]isize{};
-        }
-
-        var strides = try allocator.alloc(isize, self.dims.len);
-        @memset(strides, 0);
-
-        if (std.mem.indexOfScalar(usize, self.dims, 0)) |_| {
-            // If any dimension is zero, all strides are zero
-            return strides;
-        }
-
-        switch (self.order) {
-            .C => {
-                // Shape (a, b, c) => Give strides (b * c, c, 1)
-                var stride: isize = 1;
-                for (0..self.dims.len) |i_rev| {
-                    // NOTE: self.dims is not empty, so this index is safe
-                    const i = self.dims.len - 1 - i_rev;
-                    strides[i] = stride;
-                    // SAFETY: this cast and multiplication is overflow-safe because we have already verified that
-                    // the total size does not overflow isize, which means the individual
-                    // dimensions and strides must also fit in isize.
-                    const dim = self.dims[i];
-                    stride *= @intCast(dim);
-                }
-            },
-            .F => {
-                // Shape (a, b, c) => Give strides (1, a, a * b)
-                var stride: isize = 1;
-                for (self.dims, 0..) |dim, i| {
-                    strides[i] = stride;
-                    // SAFETY: this cast and multiplication is overflow-safe because we have already verified that
-                    // the total size does not overflow isize, which means the individual
-                    // dimensions and strides must also fit in isize.
-                    stride *= @intCast(dim);
-                }
-            },
-        }
-
-        std.debug.assert(strides.len == self.dims.len);
-        return strides;
-    }
-};
-
-/// A multi-dimensional shape with a compile-time known number of dimensions.
-pub fn StaticShape(comptime ndim: usize) type {
+/// A `Shape` represents the dimensions and memory order of a numpy array.
+/// It can be either statically (`Rank` is non-null) or dynamically ranked (`Rank` is null).
+///
+/// The shape does not own the dimension data; the caller is responsible for ensuring
+/// that the `dims` slice remains valid for the lifetime of the `Shape`.
+/// The total number of elements in the shape must not overflow `std.math.maxInt(isize)`.
+pub fn Shape(comptime Rank: ?usize) type {
     return struct {
-        /// The size of each dimension.
-        dims: [ndim]usize,
+        /// The size of each dimension. The slice is owned by the caller.
+        /// The total number of elements is the product of all dimensions,
+        /// which must not overflow `std.math.maxInt(isize)`.
+        dims: if (Rank) |R| [R]usize else []const usize,
         /// The memory order of the array.
         order: header.Order,
 
@@ -117,40 +43,64 @@ pub fn StaticShape(comptime ndim: usize) type {
 
         pub const FromHeaderError = error{ ShapeSizeOverflow, DimensionMismatch };
 
-        /// Create a StaticShape from a numpy header.
-        /// Returns an error if the header has the wrong number of dimensions
-        /// or if the shape's total size in bytes overflows isize.
-        pub fn fromHeader(npy_header: header.Header) FromHeaderError!struct { Self, usize } {
-            if (npy_header.shape.len != ndim) {
-                return error.DimensionMismatch;
-            }
+        pub const StridesType = if (Rank) |R| [R]isize else []isize;
 
-            const num_elements = shapeSizeChecked(npy_header.descr, npy_header.shape) orelse {
-                return error.ShapeSizeOverflow;
+        /// Create a Shape from a numpy header.
+        /// Returns an error if the shape's total size in bytes overflows isize,
+        /// or if the number of dimensions does not match the expected Rank (if static).
+        /// On success, also returns the total number of elements.
+        pub fn fromHeader(npy_header: header.Header) FromHeaderError!struct { Self, usize } {
+            // Extract shape, checking rank if static
+            const shape = blk: {
+                if (Rank) |R| {
+                    if (npy_header.shape.len != R) {
+                        return error.DimensionMismatch;
+                    }
+                    var static_dims: [R]usize = undefined;
+                    @memcpy(&static_dims, npy_header.shape[0..R]);
+                    break :blk static_dims;
+                } else {
+                    break :blk npy_header.shape;
+                }
             };
 
-            var dims: [ndim]usize = undefined;
-            @memcpy(&dims, npy_header.shape);
-
+            // Check that the shape length fits in isize
+            const num_elements = shapeSizeChecked(npy_header.descr, shape[0..]) orelse {
+                return error.ShapeSizeOverflow;
+            };
             return .{ Self{
-                .dims = dims,
+                .dims = shape,
                 .order = npy_header.order,
             }, num_elements };
         }
 
-        /// Compute the strides for this shape.
-        /// Returns an array with the same length as the number of dimensions.
-        pub fn getStrides(self: *const Self) [ndim]isize {
-            if (ndim == 0) {
-                // Scalar case: no dimensions, no strides
-                return [_]isize{};
-            }
+        /// Compute the strides for this shape, allocating the result using the given allocator (if dynamic).
+        /// Strides slice has the same length as the number of dimensions in the shape.
+        ///
+        /// **Invariant**: For any valid multi-dimensional index (where `0 <= indices[i] < dims[i]` for all `i`),
+        /// the offset calculation `Σ(indices[i] * strides[i])` is guaranteed to:
+        /// 1. Be less than the total number of elements in the shape
+        /// 2. Fit in isize without overflow
+        pub fn getStrides(
+            self: *const Self,
+            // If static, this arg is 'void' (takes {}). If dynamic, it's 'Allocator'.
+            allocator: if (Rank == null) std.mem.Allocator else void,
+        ) if (Rank == null) std.mem.Allocator.Error!StridesType else StridesType {
+            var strides: StridesType = if (Rank) |R|
+                [_]isize{0} ** R
+            else blk: {
+                const s = try allocator.alloc(isize, self.dims.len);
+                @memset(s, 0);
+                break :blk s;
+            };
 
-            var strides: [ndim]isize = undefined;
+            const len = if (Rank) |R| R else self.dims.len;
 
-            if (std.mem.indexOfScalar(usize, &self.dims, 0)) |_| {
+            // Scalar case: no dimensions, no strides
+            if (len == 0) return strides;
+
+            if (std.mem.indexOfScalar(usize, self.dims[0..], 0)) |_| {
                 // If any dimension is zero, all strides are zero
-                @memset(&strides, 0);
                 return strides;
             }
 
@@ -186,6 +136,12 @@ pub fn StaticShape(comptime ndim: usize) type {
         }
     };
 }
+
+fn StaticShape(comptime Rank: usize) type {
+    return Shape(Rank);
+}
+
+const DynamicShape = Shape(null);
 
 test "shapeSizeChecked - normal shape" {
     const shape = [_]usize{ 3, 4, 5 };
@@ -432,7 +388,7 @@ test "StaticShape(0) - scalar shape" {
         .order = .C,
     };
     // Scalar shape has 1 element
-    const strides = shape.getStrides();
+    const strides = shape.getStrides({});
     try std.testing.expectEqual(@as(usize, 0), strides.len);
 }
 
@@ -443,7 +399,7 @@ test "StaticShape(1) - 1D shape" {
         .order = .C,
     };
     // Shape (10) has 10 elements
-    const strides = shape.getStrides();
+    const strides = shape.getStrides({});
     try std.testing.expectEqual(@as(usize, 1), strides.len);
     try std.testing.expectEqual(@as(isize, 1), strides[0]);
 }
@@ -455,7 +411,7 @@ test "StaticShape(2) - 2D C order" {
         .order = .C,
     };
     // Shape (5, 7) has 35 elements
-    const strides = shape.getStrides();
+    const strides = shape.getStrides({});
     try std.testing.expectEqual(@as(usize, 2), strides.len);
     // C order: strides are (7, 1)
     try std.testing.expectEqual(@as(isize, 7), strides[0]);
@@ -469,7 +425,7 @@ test "StaticShape(2) - 2D F order" {
         .order = .F,
     };
     // Shape (5, 7) has 35 elements
-    const strides = shape.getStrides();
+    const strides = shape.getStrides({});
     try std.testing.expectEqual(@as(usize, 2), strides.len);
     // F order: strides are (1, 5)
     try std.testing.expectEqual(@as(isize, 1), strides[0]);
@@ -483,7 +439,7 @@ test "StaticShape(3) - 3D C order" {
         .order = .C,
     };
     // Shape (2, 3, 4) has 24 elements
-    const strides = shape.getStrides();
+    const strides = shape.getStrides({});
     try std.testing.expectEqual(@as(usize, 3), strides.len);
     // C order: strides are (12, 4, 1)
     try std.testing.expectEqual(@as(isize, 12), strides[0]);
@@ -498,7 +454,7 @@ test "StaticShape(3) - 3D F order" {
         .order = .F,
     };
     // Shape (2, 3, 4) has 24 elements
-    const strides = shape.getStrides();
+    const strides = shape.getStrides({});
     try std.testing.expectEqual(@as(usize, 3), strides.len);
     // F order: strides are (1, 2, 6)
     try std.testing.expectEqual(@as(isize, 1), strides[0]);
@@ -513,7 +469,7 @@ test "StaticShape(3) - shape with zero dimension" {
         .order = .C,
     };
     // Shape (3, 0, 5) has 0 elements (zero dimension)
-    const strides = shape.getStrides();
+    const strides = shape.getStrides({});
     try std.testing.expectEqual(@as(usize, 3), strides.len);
     // All strides should be zero
     try std.testing.expectEqual(@as(isize, 0), strides[0]);
@@ -528,7 +484,7 @@ test "StaticShape(4) - 4D C order" {
         .order = .C,
     };
     // Shape (2, 3, 4, 5) has 120 elements
-    const strides = shape.getStrides();
+    const strides = shape.getStrides({});
     // C order: strides are (60, 20, 5, 1)
     try std.testing.expectEqual(@as(isize, 60), strides[0]);
     try std.testing.expectEqual(@as(isize, 20), strides[1]);
@@ -543,7 +499,7 @@ test "StaticShape(4) - 4D F order" {
         .order = .F,
     };
     // Shape (2, 3, 4, 5) has 120 elements
-    const strides = shape.getStrides();
+    const strides = shape.getStrides({});
     // F order: strides are (1, 2, 6, 24)
     try std.testing.expectEqual(@as(isize, 1), strides[0]);
     try std.testing.expectEqual(@as(isize, 2), strides[1]);

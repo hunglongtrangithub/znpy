@@ -8,7 +8,7 @@ const array = @import("array.zig");
 
 pub const ElementType = header.ElementType;
 pub const Element = elements.Element;
-pub const ArrayView = array.DynamicArrayView;
+pub const ArrayView = array.ArrayView;
 
 test {
     _ = header;
