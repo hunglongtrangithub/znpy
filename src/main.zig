@@ -38,6 +38,8 @@ fn processNpyFile(file: std.fs.File) !void {
     };
     defer array_view.deinit(allocator);
 
+    std.debug.assert(array_view.dims.len == 3);
+
     for (0..array_view.dims[0]) |i| {
         for (0..array_view.dims[1]) |j| {
             for (0..array_view.dims[2]) |k| {
@@ -50,7 +52,7 @@ fn processNpyFile(file: std.fs.File) !void {
 
 pub fn main() !void {
     const source_dir = comptime dirname(@src().file) orelse "src";
-    const npy_file_path = comptime source_dir ++ "/" ++ "../test-data/shapes/i8_5d_2x3x4x5x6.npy";
+    const npy_file_path = comptime source_dir ++ "/" ++ "../test-data/shapes/i16_3d_3x4x5.npy";
     // const npy_file_path = "test.npy";
     const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
         std.debug.print("Failed to open file: {}\n", .{e});

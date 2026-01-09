@@ -25,7 +25,7 @@ pub fn shapeSizeChecked(T: header.ElementType, shape: []const usize) ?usize {
 }
 
 /// A multi-dimensional shape of an array, with a dynamic number of dimensions.
-pub const Shape = struct {
+pub const DynamicShape = struct {
     /// The size of each dimension. The slice is owned by the caller.
     /// The total number of elements is the product of all dimensions,
     /// which must not overflow `std.math.maxInt(isize)`.
@@ -105,6 +105,88 @@ pub const Shape = struct {
     }
 };
 
+/// A multi-dimensional shape with a compile-time known number of dimensions.
+pub fn StaticShape(comptime ndim: usize) type {
+    return struct {
+        /// The size of each dimension.
+        dims: [ndim]usize,
+        /// The memory order of the array.
+        order: header.Order,
+
+        const Self = @This();
+
+        pub const FromHeaderError = error{ ShapeSizeOverflow, DimensionMismatch };
+
+        /// Create a StaticShape from a numpy header.
+        /// Returns an error if the header has the wrong number of dimensions
+        /// or if the shape's total size in bytes overflows isize.
+        pub fn fromHeader(npy_header: header.Header) FromHeaderError!struct { Self, usize } {
+            if (npy_header.shape.len != ndim) {
+                return error.DimensionMismatch;
+            }
+
+            const num_elements = shapeSizeChecked(npy_header.descr, npy_header.shape) orelse {
+                return error.ShapeSizeOverflow;
+            };
+
+            var dims: [ndim]usize = undefined;
+            @memcpy(&dims, npy_header.shape);
+
+            return .{ Self{
+                .dims = dims,
+                .order = npy_header.order,
+            }, num_elements };
+        }
+
+        /// Compute the strides for this shape.
+        /// Returns an array with the same length as the number of dimensions.
+        pub fn getStrides(self: *const Self) [ndim]isize {
+            if (ndim == 0) {
+                // Scalar case: no dimensions, no strides
+                return [_]isize{};
+            }
+
+            var strides: [ndim]isize = undefined;
+
+            if (std.mem.indexOfScalar(usize, &self.dims, 0)) |_| {
+                // If any dimension is zero, all strides are zero
+                @memset(&strides, 0);
+                return strides;
+            }
+
+            switch (self.order) {
+                .C => {
+                    // Shape (a, b, c) => Give strides (b * c, c, 1)
+                    var stride: isize = 1;
+                    for (0..self.dims.len) |i_rev| {
+                        // NOTE: self.dims is not empty, so this index is safe
+                        const i = self.dims.len - 1 - i_rev;
+                        strides[i] = stride;
+                        // SAFETY: this cast and multiplication is overflow-safe because we have already verified that
+                        // the total size does not overflow isize, which means the individual
+                        // dimensions and strides must also fit in isize.
+                        const dim = self.dims[i];
+                        stride *= @intCast(dim);
+                    }
+                },
+                .F => {
+                    // Shape (a, b, c) => Give strides (1, a, a * b)
+                    var stride: isize = 1;
+                    for (self.dims, 0..) |dim, i| {
+                        strides[i] = stride;
+                        // SAFETY: this cast and multiplication is overflow-safe because we have already verified that
+                        // the total size does not overflow isize, which means the individual
+                        // dimensions and strides must also fit in isize.
+                        stride *= @intCast(dim);
+                    }
+                },
+            }
+
+            return strides;
+        }
+    };
+}
+
 test "shapeSizeChecked - normal shape" {
     const shape = [_]usize{ 3, 4, 5 };
     const result = shapeSizeChecked(.{ .Float64 = null }, &shape);
@@ -153,7 +235,7 @@ test "Shape.fromHeader - valid shape" {
         .descr = .{ .Float64 = null },
         .order = .C,
     };
-    const shape, _ = try Shape.fromHeader(npy_header);
+    const shape, _ = try DynamicShape.fromHeader(npy_header);
     try std.testing.expectEqual(@as(usize, 3), shape.dims.len);
     try std.testing.expectEqual(@as(usize, 2), shape.dims[0]);
     try std.testing.expectEqual(@as(usize, 3), shape.dims[1]);
@@ -170,15 +252,15 @@ test "Shape.fromHeader - overflow error" {
         .descr = .{ .Float64 = null },
         .order = .C,
     };
-    const result, _ = Shape.fromHeader(npy_header);
-    try std.testing.expectError(Shape.FromHeaderError.ShapeSizeOverflow, result);
+    const result = DynamicShape.fromHeader(npy_header);
+    try std.testing.expectError(DynamicShape.FromHeaderError.ShapeSizeOverflow, result);
     _ = allocator;
 }
 
 test "Shape.getStrides - empty shape" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{};
-    const shape = Shape{
+    const shape = DynamicShape{
         .dims = &shape_data,
         .order = .C,
     };
@@ -195,7 +277,7 @@ test "Shape.getStrides - shape with zero dimension C order" {
         .descr = .{ .Float64 = null },
         .order = .C,
     };
-    const shape, _ = try Shape.fromHeader(npy_header);
+    const shape, _ = try DynamicShape.fromHeader(npy_header);
     const strides = try shape.getStrides(allocator);
     defer allocator.free(strides);
     try std.testing.expectEqual(@as(usize, 3), strides.len);
@@ -212,7 +294,7 @@ test "Shape.getStrides - shape with zero dimension F order" {
         .descr = .{ .Float64 = null },
         .order = .F,
     };
-    const shape, _ = try Shape.fromHeader(npy_header);
+    const shape, _ = try DynamicShape.fromHeader(npy_header);
     const strides = try shape.getStrides(allocator);
     defer allocator.free(strides);
     try std.testing.expectEqual(@as(usize, 3), strides.len);
@@ -224,7 +306,7 @@ test "Shape.getStrides - shape with zero dimension F order" {
 test "Shape.getStrides - C order (2, 3, 4)" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 2, 3, 4 };
-    const shape = Shape{
+    const shape = DynamicShape{
         .dims = &shape_data,
         .order = .C,
     };
@@ -240,7 +322,7 @@ test "Shape.getStrides - C order (2, 3, 4)" {
 test "Shape.getStrides - F order (2, 3, 4)" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 2, 3, 4 };
-    const shape = Shape{
+    const shape = DynamicShape{
         .dims = &shape_data,
         .order = .F,
     };
@@ -256,7 +338,7 @@ test "Shape.getStrides - F order (2, 3, 4)" {
 test "Shape.getStrides - C order 1D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{10};
-    const shape = Shape{
+    const shape = DynamicShape{
         .dims = &shape_data,
         .order = .C,
     };
@@ -269,7 +351,7 @@ test "Shape.getStrides - C order 1D array" {
 test "Shape.getStrides - F order 1D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{10};
-    const shape = Shape{
+    const shape = DynamicShape{
         .dims = &shape_data,
         .order = .F,
     };
@@ -282,7 +364,7 @@ test "Shape.getStrides - F order 1D array" {
 test "Shape.getStrides - C order 2D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 5, 7 };
-    const shape = Shape{
+    const shape = DynamicShape{
         .dims = &shape_data,
         .order = .C,
     };
@@ -297,7 +379,7 @@ test "Shape.getStrides - C order 2D array" {
 test "Shape.getStrides - F order 2D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 5, 7 };
-    const shape = Shape{
+    const shape = DynamicShape{
         .dims = &shape_data,
         .order = .F,
     };
@@ -312,7 +394,7 @@ test "Shape.getStrides - F order 2D array" {
 test "Shape.getStrides - C order 4D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 2, 3, 4, 5 };
-    const shape = Shape{
+    const shape = DynamicShape{
         .dims = &shape_data,
         .order = .C,
     };
@@ -329,7 +411,7 @@ test "Shape.getStrides - C order 4D array" {
 test "Shape.getStrides - F order 4D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 2, 3, 4, 5 };
-    const shape = Shape{
+    const shape = DynamicShape{
         .dims = &shape_data,
         .order = .F,
     };
@@ -341,4 +423,169 @@ test "Shape.getStrides - F order 4D array" {
     try std.testing.expectEqual(@as(isize, 2), strides[1]);
     try std.testing.expectEqual(@as(isize, 6), strides[2]);
     try std.testing.expectEqual(@as(isize, 24), strides[3]);
+}
+
+test "StaticShape(0) - scalar shape" {
+    const Shape0D = StaticShape(0);
+    const shape = Shape0D{
+        .dims = [_]usize{},
+        .order = .C,
+    };
+    // Scalar shape has 1 element
+    const strides = shape.getStrides();
+    try std.testing.expectEqual(@as(usize, 0), strides.len);
+}
+
+test "StaticShape(1) - 1D shape" {
+    const Shape1D = StaticShape(1);
+    const shape = Shape1D{
+        .dims = [_]usize{10},
+        .order = .C,
+    };
+    // Shape (10) has 10 elements
+    const strides = shape.getStrides();
+    try std.testing.expectEqual(@as(usize, 1), strides.len);
+    try std.testing.expectEqual(@as(isize, 1), strides[0]);
+}
+
+test "StaticShape(2) - 2D C order" {
+    const Shape2D = StaticShape(2);
+    const shape = Shape2D{
+        .dims = [_]usize{ 5, 7 },
+        .order = .C,
+    };
+    // Shape (5, 7) has 35 elements
+    const strides = shape.getStrides();
+    try std.testing.expectEqual(@as(usize, 2), strides.len);
+    // C order: strides are (7, 1)
+    try std.testing.expectEqual(@as(isize, 7), strides[0]);
+    try std.testing.expectEqual(@as(isize, 1), strides[1]);
+}
+
+test "StaticShape(2) - 2D F order" {
+    const Shape2D = StaticShape(2);
+    const shape = Shape2D{
+        .dims = [_]usize{ 5, 7 },
+        .order = .F,
+    };
+    // Shape (5, 7) has 35 elements
+    const strides = shape.getStrides();
+    try std.testing.expectEqual(@as(usize, 2), strides.len);
+    // F order: strides are (1, 5)
+    try std.testing.expectEqual(@as(isize, 1), strides[0]);
+    try std.testing.expectEqual(@as(isize, 5), strides[1]);
+}
+
+test "StaticShape(3) - 3D C order" {
+    const Shape3D = StaticShape(3);
+    const shape = Shape3D{
+        .dims = [_]usize{ 2, 3, 4 },
+        .order = .C,
+    };
+    // Shape (2, 3, 4) has 24 elements
+    const strides = shape.getStrides();
+    try std.testing.expectEqual(@as(usize, 3), strides.len);
+    // C order: strides are (12, 4, 1)
+    try std.testing.expectEqual(@as(isize, 12), strides[0]);
+    try std.testing.expectEqual(@as(isize, 4), strides[1]);
+    try std.testing.expectEqual(@as(isize, 1), strides[2]);
+}
+
+test "StaticShape(3) - 3D F order" {
+    const Shape3D = StaticShape(3);
+    const shape = Shape3D{
+        .dims = [_]usize{ 2, 3, 4 },
+        .order = .F,
+    };
+    // Shape (2, 3, 4) has 24 elements
+    const strides = shape.getStrides();
+    try std.testing.expectEqual(@as(usize, 3), strides.len);
+    // F order: strides are (1, 2, 6)
+    try std.testing.expectEqual(@as(isize, 1), strides[0]);
+    try std.testing.expectEqual(@as(isize, 2), strides[1]);
+    try std.testing.expectEqual(@as(isize, 6), strides[2]);
+}
+
+test "StaticShape(3) - shape with zero dimension" {
+    const Shape3D = StaticShape(3);
+    const shape = Shape3D{
+        .dims = [_]usize{ 3, 0, 5 },
+        .order = .C,
+    };
+    // Shape (3, 0, 5) has 0 elements (zero dimension)
+    const strides = shape.getStrides();
+    try std.testing.expectEqual(@as(usize, 3), strides.len);
+    // All strides should be zero
+    try std.testing.expectEqual(@as(isize, 0), strides[0]);
+    try std.testing.expectEqual(@as(isize, 0), strides[1]);
+    try std.testing.expectEqual(@as(isize, 0), strides[2]);
+}
+
+test "StaticShape(4) - 4D C order" {
+    const Shape4D = StaticShape(4);
+    const shape = Shape4D{
+        .dims = [_]usize{ 2, 3, 4, 5 },
+        .order = .C,
+    };
+    // Shape (2, 3, 4, 5) has 120 elements
+    const strides = shape.getStrides();
+    // C order: strides are (60, 20, 5, 1)
+    try std.testing.expectEqual(@as(isize, 60), strides[0]);
+    try std.testing.expectEqual(@as(isize, 20), strides[1]);
+    try std.testing.expectEqual(@as(isize, 5), strides[2]);
+    try std.testing.expectEqual(@as(isize, 1), strides[3]);
+}
+
+test "StaticShape(4) - 4D F order" {
+    const Shape4D = StaticShape(4);
+    const shape = Shape4D{
+        .dims = [_]usize{ 2, 3, 4, 5 },
+        .order = .F,
+    };
+    // Shape (2, 3, 4, 5) has 120 elements
+    const strides = shape.getStrides();
+    // F order: strides are (1, 2, 6, 24)
+    try std.testing.expectEqual(@as(isize, 1), strides[0]);
+    try std.testing.expectEqual(@as(isize, 2), strides[1]);
+    try std.testing.expectEqual(@as(isize, 6), strides[2]);
+    try std.testing.expectEqual(@as(isize, 24), strides[3]);
+}
+
+test "StaticShape.fromHeader - valid 2D" {
+    const Shape2D = StaticShape(2);
+    var shape_data = [_]usize{ 3, 4 };
+    const npy_header = header.Header{
+        .shape = &shape_data,
+        .descr = .{ .Float64 = null },
+        .order = .C,
+    };
+    const shape, const num_elements = try Shape2D.fromHeader(npy_header);
+    try std.testing.expectEqual(@as(usize, 12), num_elements);
+    try std.testing.expectEqual(@as(usize, 3), shape.dims[0]);
+    try std.testing.expectEqual(@as(usize, 4), shape.dims[1]);
+    try std.testing.expectEqual(header.Order.C, shape.order);
+}
+
+test "StaticShape.fromHeader - dimension mismatch" {
+    const Shape2D = StaticShape(2);
+    var shape_data = [_]usize{ 3, 4, 5 };
+    const npy_header = header.Header{
+        .shape = &shape_data,
+        .descr = .{ .Float64 = null },
+        .order = .C,
+    };
+    const result = Shape2D.fromHeader(npy_header);
+    try std.testing.expectError(error.DimensionMismatch, result);
+}
+
+test "StaticShape.fromHeader - overflow error" {
+    const Shape2D = StaticShape(2);
+    var shape_data = [_]usize{ std.math.maxInt(usize), 2 };
+    const npy_header = header.Header{
+        .shape = &shape_data,
+        .descr = .{ .Float64 = null },
+        .order = .C,
+    };
+    const result = Shape2D.fromHeader(npy_header);
+    try std.testing.expectError(error.ShapeSizeOverflow, result);
 }

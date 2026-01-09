@@ -126,7 +126,7 @@ fn oppositeEndian(endian: std.builtin.Endian) std.builtin.Endian {
 }
 
 test "bytesAsSlice - Bool with null endian, valid data" {
-    const bytes = [_]u8{ 0, 1, 1, 0, 1 };
+    var bytes = [_]u8{ 0, 1, 1, 0, 1 };
     const result = try Element(bool).bytesAsSlice(&bytes, 5, .Bool);
     try std.testing.expectEqual(5, result.len);
     try std.testing.expectEqual(false, result[0]);
@@ -137,7 +137,7 @@ test "bytesAsSlice - Bool with null endian, valid data" {
 }
 
 test "bytesAsSlice - Int8 with null endian" {
-    const bytes = [_]u8{ 0, 127, 255, 128, 1 };
+    var bytes = [_]u8{ 0, 127, 255, 128, 1 };
     const result = try Element(i8).bytesAsSlice(&bytes, 5, .Int8);
     try std.testing.expectEqual(5, result.len);
     try std.testing.expectEqual(@as(i8, 0), result[0]);
@@ -148,7 +148,7 @@ test "bytesAsSlice - Int8 with null endian" {
 }
 
 test "bytesAsSlice - UInt8 with null endian" {
-    const bytes = [_]u8{ 0, 127, 255, 128, 1 };
+    var bytes = [_]u8{ 0, 127, 255, 128, 1 };
     const result = try Element(u8).bytesAsSlice(&bytes, 5, .UInt8);
     try std.testing.expectEqual(5, result.len);
     try std.testing.expectEqual(@as(u8, 0), result[0]);
@@ -348,13 +348,13 @@ test "bytesAsSlice - Complex128 with explicit native endian" {
 }
 
 test "bytesAsSlice - InvalidBool error" {
-    const bytes = [_]u8{ 0, 1, 2, 1, 0 }; // byte with value 2 is invalid
+    var bytes = [_]u8{ 0, 1, 2, 1, 0 }; // byte with value 2 is invalid
     const result = Element(bool).bytesAsSlice(&bytes, 5, .Bool);
     try std.testing.expectError(ViewDataError.InvalidBool, result);
 }
 
 test "bytesAsSlice - InvalidBool with 255" {
-    const bytes = [_]u8{ 0, 1, 255, 1, 0 };
+    var bytes = [_]u8{ 0, 1, 255, 1, 0 };
     const result = Element(bool).bytesAsSlice(&bytes, 5, .Bool);
     try std.testing.expectError(ViewDataError.InvalidBool, result);
 }
@@ -426,7 +426,7 @@ test "bytesAsSlice - EndiannessMismatch for Complex128" {
 }
 
 test "bytesAsSlice - MissingBytes for Bool" {
-    const bytes = [_]u8{ 0, 1, 0 };
+    var bytes = [_]u8{ 0, 1, 0 };
     const result = Element(bool).bytesAsSlice(&bytes, 5, .Bool); // Requesting 5, only 3 available
     try std.testing.expectError(ViewDataError.MissingBytes, result);
 }
@@ -444,7 +444,7 @@ test "bytesAsSlice - MissingBytes for Float64" {
 }
 
 test "bytesAsSlice - ExtraBytes for Bool" {
-    const bytes = [_]u8{ 0, 1, 0, 1, 0 };
+    var bytes = [_]u8{ 0, 1, 0, 1, 0 };
     const result = Element(bool).bytesAsSlice(&bytes, 3, .Bool); // Only need 3, have 5
     try std.testing.expectError(ViewDataError.ExtraBytes, result);
 }
@@ -462,7 +462,7 @@ test "bytesAsSlice - ExtraBytes for Float32" {
 }
 
 test "bytesAsSlice - LengthOverflow" {
-    const bytes = [_]u8{0};
+    var bytes = [_]u8{0};
     // Try to allocate max usize elements of u64, which should overflow
     const huge_len = std.math.maxInt(usize);
     const result = Element(u64).bytesAsSlice(&bytes, huge_len, .{ .UInt64 = null });
@@ -470,13 +470,13 @@ test "bytesAsSlice - LengthOverflow" {
 }
 
 test "bytesAsSlice - zero-length bytes with non-zero len" {
-    const bytes = [_]u8{};
+    var bytes = [_]u8{};
     const result = Element(bool).bytesAsSlice(&bytes, 1, .Bool);
     try std.testing.expectError(ViewDataError.MissingBytes, result);
 }
 
 test "bytesAsSlice - zero len with non-empty bytes for Bool" {
-    const bytes = [_]u8{ 0, 1 };
+    var bytes = [_]u8{ 0, 1 };
     const result = Element(bool).bytesAsSlice(&bytes, 0, .Bool);
     try std.testing.expectError(ViewDataError.ExtraBytes, result);
 }
@@ -488,13 +488,13 @@ test "bytesAsSlice - zero len with non-empty bytes for Int32" {
 }
 
 test "bytesAsSlice - zero len with empty bytes returns empty slice" {
-    const bytes = [_]u8{};
+    var bytes = [_]u8{};
     const result = try Element(bool).bytesAsSlice(&bytes, 0, .Bool);
     try std.testing.expectEqual(0, result.len);
 }
 
 test "bytesAsSlice - zero len with empty bytes for Int32" {
-    const bytes = [_]u8{};
+    var bytes = [_]u8{};
     const result = try Element(i32).bytesAsSlice(&bytes, 0, .{ .Int32 = null });
     try std.testing.expectEqual(0, result.len);
 }
@@ -550,7 +550,7 @@ test "bytesAsSlice - Misaligned bytes for Complex128" {
 }
 
 test "bytesAsSlice - TypeMismatch Bool vs Int8" {
-    const bytes = [_]u8{ 0, 1, 0 };
+    var bytes = [_]u8{ 0, 1, 0 };
     const result = Element(bool).bytesAsSlice(&bytes, 3, .Int8);
     try std.testing.expectError(ViewDataError.TypeMismatch, result);
 }
