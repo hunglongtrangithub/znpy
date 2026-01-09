@@ -14,7 +14,9 @@ pub fn DynamicArray(comptime T: type) type {
     return struct {
         /// The shape of the array (dimensions, strides, order, num_elements)
         shape: shape_mod.DynamicShape,
-        /// This pointer always points to "Logical Index 0" of the array.
+        /// The data buffer for memory management (allocation/deallocation)
+        data_buffer: []T,
+        /// Pointer to "Logical Index 0" of the array (may differ from data_buffer.ptr for negative strides)
         data_ptr: [*]T,
 
         const Self = @This();
@@ -38,11 +40,16 @@ pub fn DynamicArray(comptime T: type) type {
 
             return Self{
                 .shape = shape,
+                .data_buffer = data_buffer,
                 .data_ptr = data_buffer.ptr,
             };
         }
 
-        // TODO: add deinit method to free the data buffer
+        /// Deinitialize the array, freeing the data buffer and shape.
+        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.data_buffer);
+            self.shape.deinit(allocator);
+        }
 
         /// Create a `DynamicArrayView` from a numpy file buffer.
         /// The buffer must contain a valid numpy array file.
@@ -64,15 +71,8 @@ pub fn DynamicArray(comptime T: type) type {
 
             return Self{
                 .shape = shape,
-                .data_ptr = data_buffer.ptr,
+                .data_buffer = data_buffer,
             };
-        }
-
-        /// Deinitialize the `ArrayView`, freeing any allocated resources.
-        /// Only needed for dynamic rank arrays.
-        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
-            allocator.free(self.strides);
-            allocator.free(self.dims);
         }
 
         /// Set the element at the given multi-dimensional index.
@@ -143,7 +143,9 @@ pub fn ConstDynamicArray(comptime T: type) type {
     return struct {
         /// The shape of the array (dimensions, strides, order, num_elements)
         shape: shape_mod.DynamicShape,
-        /// This pointer always points to "Logical Index 0" of the array.
+        /// The data buffer for memory management (allocation/deallocation)
+        data_buffer: []const T,
+        /// Pointer to "Logical Index 0" of the array (may differ from data_buffer.ptr for negative strides)
         data_ptr: [*]const T,
 
         const Self = @This();
@@ -170,6 +172,7 @@ pub fn ConstDynamicArray(comptime T: type) type {
 
             return Self{
                 .shape = shape,
+                .data_buffer = data_buffer,
                 .data_ptr = data_buffer.ptr,
             };
         }

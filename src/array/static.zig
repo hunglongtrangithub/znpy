@@ -15,7 +15,9 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
     return struct {
         /// The shape of the array (dimensions, strides, order, num_elements)
         shape: shape_mod.StaticShape(rank),
-        /// This pointer always points to "Logical Index 0" of the array.
+        /// The data buffer for memory management (allocation/deallocation)
+        data_buffer: []T,
+        /// Pointer to "Logical Index 0" of the array (may differ from data_buffer.ptr for negative strides)
         data_ptr: [*]T,
 
         const Self = @This();
@@ -38,11 +40,15 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
 
             return Self{
                 .shape = shape,
+                .data_buffer = data_buffer,
                 .data_ptr = data_buffer.ptr,
             };
         }
 
-        // TODO: add deinit method to free the data buffer
+        /// Deinitialize the array, freeing the data buffer.
+        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.data_buffer);
+        }
 
         /// Create a `StaticArrayView` from a numpy file buffer.
         /// The buffer must contain a valid numpy array file.
@@ -64,6 +70,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
 
             return Self{
                 .shape = shape,
+                .data_buffer = data_buffer,
                 .data_ptr = data_buffer.ptr,
             };
         }
@@ -132,7 +139,9 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
     return struct {
         /// The shape of the array (dimensions, strides, order, num_elements)
         shape: shape_mod.StaticShape(rank),
-        /// This pointer always points to "Logical Index 0" of the array.
+        /// The data buffer for memory management (allocation/deallocation)
+        data_buffer: []const T,
+        /// Pointer to "Logical Index 0" of the array (may differ from data_buffer.ptr for negative strides)
         data_ptr: [*]const T,
 
         const Self = @This();
@@ -159,6 +168,7 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
 
             return Self{
                 .shape = shape,
+                .data_buffer = data_buffer,
                 .data_ptr = data_buffer.ptr,
             };
         }
@@ -216,8 +226,13 @@ test "StaticArrayView(f64, 2) - basic 2D array" {
 
     var data = [_]f64{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
     const view = StaticView2D{
-        .dims = [_]usize{ 2, 3 },
-        .strides = [_]isize{ 3, 1 }, // C-order strides
+        .shape = shape_mod.StaticShape(2){
+            .dims = [_]usize{ 2, 3 },
+            .strides = [_]isize{ 3, 1 }, // C-order strides
+            .order = .C,
+            .num_elements = 6,
+        },
+        .data_buffer = &data,
         .data_ptr = &data,
     };
 
@@ -240,8 +255,13 @@ test "StaticArrayView(i32, 3) - 3D array C order" {
     }
 
     const view = StaticView3D{
-        .dims = [_]usize{ 2, 3, 4 },
-        .strides = [_]isize{ 12, 4, 1 }, // C-order: (3*4, 4, 1)
+        .shape = shape_mod.StaticShape(3){
+            .dims = [_]usize{ 2, 3, 4 },
+            .strides = [_]isize{ 12, 4, 1 }, // C-order: (3*4, 4, 1)
+            .order = .C,
+            .num_elements = 24,
+        },
+        .data_buffer = &data,
         .data_ptr = &data,
     };
 
@@ -263,8 +283,13 @@ test "StaticArrayView(f32, 2) - Fortran order strides" {
     }
 
     const view = StaticView2D{
-        .dims = [_]usize{ 3, 4 },
-        .strides = [_]isize{ 1, 3 }, // F-order: (1, 3)
+        .shape = shape_mod.StaticShape(2){
+            .dims = [_]usize{ 3, 4 },
+            .strides = [_]isize{ 1, 3 }, // F-order: (1, 3)
+            .order = .F,
+            .num_elements = 12,
+        },
+        .data_buffer = &data,
         .data_ptr = &data,
     };
 
@@ -280,8 +305,13 @@ test "StaticArrayView(i32, 1) - 1D array" {
 
     var data = [_]i32{ 10, 20, 30, 40, 50 };
     const view = StaticView1D{
-        .dims = [_]usize{5},
-        .strides = [_]isize{1},
+        .shape = shape_mod.StaticShape(1){
+            .dims = [_]usize{5},
+            .strides = [_]isize{1},
+            .order = .C,
+            .num_elements = 5,
+        },
+        .data_buffer = &data,
         .data_ptr = &data,
     };
 
@@ -297,8 +327,13 @@ test "StaticArrayView(f64, 2) - out of bounds access" {
 
     var data = [_]f64{ 1.0, 2.0, 3.0, 4.0 };
     const view = StaticView2D{
-        .dims = [_]usize{ 2, 2 },
-        .strides = [_]isize{ 2, 1 },
+        .shape = shape_mod.StaticShape(2){
+            .dims = [_]usize{ 2, 2 },
+            .strides = [_]isize{ 2, 1 },
+            .order = .C,
+            .num_elements = 4,
+        },
+        .data_buffer = &data,
         .data_ptr = &data,
     };
 
@@ -317,8 +352,13 @@ test "StaticArrayView(bool, 2) - boolean array" {
 
     var data = [_]bool{ true, false, false, true };
     const view = StaticViewBool{
-        .dims = [_]usize{ 2, 2 },
-        .strides = [_]isize{ 2, 1 },
+        .shape = shape_mod.StaticShape(2){
+            .dims = [_]usize{ 2, 2 },
+            .strides = [_]isize{ 2, 1 },
+            .order = .C,
+            .num_elements = 4,
+        },
+        .data_buffer = &data,
         .data_ptr = &data,
     };
 
@@ -338,8 +378,13 @@ test "StaticArrayView(i32, 4) - 4D array" {
     }
 
     const view = StaticView4D{
-        .dims = [_]usize{ 2, 2, 2, 2 },
-        .strides = [_]isize{ 8, 4, 2, 1 }, // C-order
+        .shape = shape_mod.StaticShape(4){
+            .dims = [_]usize{ 2, 2, 2, 2 },
+            .strides = [_]isize{ 8, 4, 2, 1 }, // C-order
+            .order = .C,
+            .num_elements = 16,
+        },
+        .data_buffer = &data,
         .data_ptr = &data,
     };
 
@@ -354,8 +399,13 @@ test "StaticArrayView(u8, 2) - modification through pointer" {
 
     var data = [_]u8{ 0, 1, 2, 3, 4, 5 };
     const view = StaticView2D{
-        .dims = [_]usize{ 2, 3 },
-        .strides = [_]isize{ 3, 1 },
+        .shape = shape_mod.StaticShape(2){
+            .dims = [_]usize{ 2, 3 },
+            .strides = [_]isize{ 3, 1 },
+            .order = .C,
+            .num_elements = 6,
+        },
+        .data_buffer = &data,
         .data_ptr = &data,
     };
 
@@ -374,8 +424,13 @@ test "StaticArrayView(i16, 3) - single element in each dimension" {
 
     var data = [_]i16{42};
     const view = StaticView3D{
-        .dims = [_]usize{ 1, 1, 1 },
-        .strides = [_]isize{ 1, 1, 1 },
+        .shape = shape_mod.StaticShape(3){
+            .dims = [_]usize{ 1, 1, 1 },
+            .strides = [_]isize{ 1, 1, 1 },
+            .order = .C,
+            .num_elements = 1,
+        },
+        .data_buffer = &data,
         .data_ptr = &data,
     };
 
