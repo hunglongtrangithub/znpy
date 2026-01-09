@@ -334,6 +334,52 @@ pub const Header = struct {
         return header_data;
     }
 
+    /// Converts the Header struct back into a Python dictionary string representation.
+    pub fn toPythonString(self: *const Self, allocator: std.mem.Allocator) std.mem.Allocator.Error![]u8 {
+        // Get descr string
+        const descr_str = self.descr.toString();
+
+        // Build shape string
+        var shape_str = std.ArrayList(u8).empty;
+        errdefer shape_str.deinit();
+
+        try shape_str.append("(");
+        switch (shape_str.items.len) {
+            0 => {
+                try shape_str.appendSlice(",)");
+            },
+            1 => {
+                const closing_str = try std.fmt.allocPrint(allocator, "{},)", .{self.shape[0]});
+                defer allocator.free(closing_str);
+                try shape_str.appendSlice(closing_str);
+            },
+            else => {
+                for (0..shape_str.items.len - 1) |idx| {
+                    const element_str = try std.fmt.allocPrint(allocator, "{}, ", .{self.shape[idx]});
+                    defer allocator.free(element_str);
+                    try shape_str.appendSlice(element_str);
+                }
+                const closing_str = try std.fmt.allocPrint(allocator, "{})", .{self.shape[shape_str.items.len - 1]});
+                defer allocator.free(closing_str);
+                try shape_str.appendSlice(closing_str);
+            },
+        }
+
+        // Determine fortran_order string
+        const fortran_order_str = switch (self.order) {
+            .C => "False",
+            .F => "True",
+        };
+
+        const header_str = try std.fmt.allocPrint(
+            allocator,
+            "{{'descr': '{}', 'fortran_order': {}, 'shape': {}, }}",
+            .{ descr_str, fortran_order_str, shape_str.items },
+        );
+
+        return header_str;
+    }
+
     pub fn deinit(self: Header, allocator: std.mem.Allocator) void {
         allocator.free(self.shape);
     }

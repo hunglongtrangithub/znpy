@@ -4,7 +4,13 @@ const znpy = @import("znpy");
 
 const dirname = std.fs.path.dirname;
 
-fn processNpyFile(file: std.fs.File) !void {
+fn readNpyArrayMmap(npy_file_path: []const u8, allocator: std.mem.Allocator) !void {
+    const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
+        std.debug.print("Failed to open file: {}\n", .{e});
+        return;
+    };
+    defer file.close();
+
     // Get file size
     const file_stat = try file.stat();
     const read_size = std.math.cast(usize, file_stat.size) orelse {
@@ -12,7 +18,7 @@ fn processNpyFile(file: std.fs.File) !void {
         return;
     };
     if (read_size == 0) {
-        std.debug.print("File is empty, nothing to map\n", .{});
+        std.debug.print("File is empty, nothing to read\n", .{});
         return;
     }
     std.debug.print("Mapping file of size: {}\n", .{read_size});
@@ -28,25 +34,21 @@ fn processNpyFile(file: std.fs.File) !void {
     );
     defer std.posix.munmap(file_buffer);
 
-    // If header size is larger than 1024 bytes, use heap allocation
-    var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
-    const allocator = fallback.get();
+    // Use a const array since the mmap buffer cannot be mutated
+    const ConstArray3D = znpy.array.ConstStaticArray(i16, 3);
 
-    const ArrayView = znpy.ArrayView(i16, 3, false);
-
-    var array_view: ArrayView = ArrayView.fromFileBuffer(file_buffer, allocator) catch |e| {
+    var array_view: ConstArray3D = ConstArray3D.fromFileBuffer(file_buffer, allocator) catch |e| {
         std.debug.print("Failed to create ArrayView from file buffer: {}\n", .{e});
         return;
     };
-    defer array_view.deinit(allocator);
 
     std.debug.assert(array_view.dims.len == 3);
 
     for (0..array_view.dims[0]) |i| {
         for (0..array_view.dims[1]) |j| {
             for (0..array_view.dims[2]) |k| {
-                const value: *const i16 = array_view.at([3]usize{ i, j, k }).?;
-                std.debug.print("Element at ({}, {}, {}) = {}\n", .{ i, j, k, value.* });
+                const value = array_view.get([3]usize{ i, j, k }).?;
+                std.debug.print("Element at ({}, {}, {}) = {}\n", .{ i, j, k, value });
             }
         }
     }
@@ -55,14 +57,10 @@ fn processNpyFile(file: std.fs.File) !void {
 pub fn main() !void {
     const source_dir = comptime dirname(@src().file) orelse "src";
     const npy_file_path = comptime source_dir ++ "/" ++ "../test-data/shapes/i16_3d_3x4x5.npy";
-    // const npy_file_path = "test.npy";
-    const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
-        std.debug.print("Failed to open file: {}\n", .{e});
-        return;
-    };
-    defer file.close();
+    var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
+    const allocator = fallback.get();
 
-    processNpyFile(file) catch |e| {
+    readNpyArrayMmap(npy_file_path, allocator) catch |e| {
         std.debug.print("Error reading header: {}\n", .{e});
     };
 }
