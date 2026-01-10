@@ -28,7 +28,11 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
 
         /// Initialize a new `StaticArray` with the given dimensions and order.
         /// A new data buffer will be allocated using the provided allocator.
-        pub fn init(dims: [rank]usize, order: header_mod.Order, allocator: std.mem.Allocator) InitError!Self {
+        pub fn init(
+            dims: [rank]usize,
+            order: header_mod.Order,
+            allocator: std.mem.Allocator,
+        ) InitError!Self {
             const shape = try shape_mod.StaticShape(rank).init(
                 dims,
                 order,

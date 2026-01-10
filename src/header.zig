@@ -111,9 +111,7 @@ pub const SliceReader = struct {
 
     const Self = @This();
 
-    pub const Error = error{
-        NotEnoughBytes,
-    };
+    pub const Error = error{NotEnoughBytes};
 
     pub fn init(slice: []const u8) Self {
         return .{ .slice = slice, .pos = 0 };
@@ -278,7 +276,11 @@ pub const Header = struct {
 
     /// Parses the given string buffer info a Header struct.
     /// The string buffer is expected to be in the format of a Python dictionary.
-    pub fn fromPythonString(header_buffer: []const u8, header_encoding: HeaderEncoding, allocator: std.mem.Allocator) ReadHeaderError!Header {
+    pub fn fromPythonString(
+        header_buffer: []const u8,
+        header_encoding: HeaderEncoding,
+        allocator: std.mem.Allocator,
+    ) ReadHeaderError!Header {
         var parser = parse.Parser.init(header_buffer, header_encoding);
         const ast = parser.parse(allocator) catch {
             return ParseHeaderError.InvalidHeaderFormat;

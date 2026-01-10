@@ -37,7 +37,11 @@ pub fn Element(comptime T: type) type {
 
         /// Interprets a byte slice as a slice of the specified element type `T`.
         /// The function checks for type compatibility, endianness, length, and alignment.
-        pub fn bytesAsSlice(bytes: []const u8, len: usize, type_descr: header.ElementType) ViewDataError![]const T {
+        pub fn bytesAsSlice(
+            bytes: []const u8,
+            len: usize,
+            type_descr: header.ElementType,
+        ) ViewDataError![]const T {
             // Element types must match
             if (std.meta.activeTag(type_descr) != std.meta.activeTag(element_type)) {
                 return ViewDataError.TypeMismatch;

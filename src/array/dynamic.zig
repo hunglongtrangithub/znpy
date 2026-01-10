@@ -27,7 +27,11 @@ pub fn DynamicArray(comptime T: type) type {
 
         /// Initialize a new `DynamicArray` with the given dimensions and order.
         /// A new data buffer will be allocated using the provided allocator.
-        pub fn init(dims: []const usize, order: header_mod.Order, allocator: std.mem.Allocator) InitError!Self {
+        pub fn init(
+            dims: []const usize,
+            order: header_mod.Order,
+            allocator: std.mem.Allocator,
+        ) InitError!Self {
             const shape = try shape_mod.DynamicShape.init(
                 dims,
                 order,

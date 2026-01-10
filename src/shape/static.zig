@@ -23,11 +23,13 @@ pub fn StaticShape(comptime rank: usize) type {
             DimensionMismatch,
         };
 
-        pub const InitError = error{
-            ShapeSizeOverflow,
-        };
+        pub const InitError = error{ShapeSizeOverflow};
 
-        pub fn init(dims: [rank]usize, order: header_mod.Order, descr: header_mod.ElementType) InitError!Self {
+        pub fn init(
+            dims: [rank]usize,
+            order: header_mod.Order,
+            descr: header_mod.ElementType,
+        ) InitError!Self {
             // Check that the shape length fits in isize
             const num_elements = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
                 return InitError.ShapeSizeOverflow;

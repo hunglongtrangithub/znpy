@@ -19,11 +19,14 @@ pub const DynamicShape = struct {
 
     pub const FromHeaderError = error{ShapeSizeOverflow};
 
-    pub const InitError = error{
-        ShapeSizeOverflow,
-    } || std.mem.Allocator.Error;
+    pub const InitError = error{ShapeSizeOverflow} || std.mem.Allocator.Error;
 
-    pub fn init(dims: []const usize, order: header_mod.Order, descr: header_mod.ElementType, allocator: std.mem.Allocator) InitError!Self {
+    pub fn init(
+        dims: []const usize,
+        order: header_mod.Order,
+        descr: header_mod.ElementType,
+        allocator: std.mem.Allocator,
+    ) InitError!Self {
         // Check that the shape length fits in isize
         const num_elements = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
             return InitError.ShapeSizeOverflow;
@@ -76,7 +79,11 @@ pub const DynamicShape = struct {
     /// the offset calculation `Σ(indices[i] * strides[i])` is guaranteed to:
     /// 1. Be less than the total number of elements in the shape
     /// 2. Fit in isize without overflow
-    fn computeStrides(dims: []const usize, order: header_mod.Order, allocator: std.mem.Allocator) std.mem.Allocator.Error![]isize {
+    fn computeStrides(
+        dims: []const usize,
+        order: header_mod.Order,
+        allocator: std.mem.Allocator,
+    ) std.mem.Allocator.Error![]isize {
         // Scalar case: no dimensions, no strides - return empty slice owned by allocator
         if (dims.len == 0) return try allocator.alloc(isize, 0);
 
