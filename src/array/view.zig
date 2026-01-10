@@ -79,7 +79,7 @@ pub fn ArrayView(comptime T: type) type {
         /// Get a pointer to the element at the given multi-dimensional index without bounds checking.
         ///
         /// SAFETY: The caller MUST ensure that all indices are within bounds.
-        /// Undefined behavior if any index[i] >= dims[i] or if index.len != dims.len.
+        /// Undefined behavior if any `index[i] >= dims[i]` or if `index.len != dims.len`.
         ///
         /// This function skips all bounds checking for maximum performance.
         /// Use only when you have already validated the indices.

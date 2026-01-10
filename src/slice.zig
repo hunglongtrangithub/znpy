@@ -104,8 +104,11 @@ pub const Slice = union(enum) {
 };
 
 pub const SliceError = error{
+    /// The expected number of dimensions from the slices
+    /// differ from the number of dimensions.
     DimensionMismatch,
-    InvalidRangeIndcies,
+    /// The provided range values are invalid.
+    InvalidRangeValues,
 };
 
 /// Calculate the new dims and strides arrays based on the given slices.
@@ -148,7 +151,7 @@ pub fn applySlices(
             },
             .Range => |range| {
                 // Range: keep this dimension with modified stride
-                const start, const end, const step = range.toAbsolute(dims[in_axis]) orelse return SliceError.InvalidRangeIndcies;
+                const start, const end, const step = range.toAbsolute(dims[in_axis]) orelse return SliceError.InvalidRangeValues;
 
                 // Calculate new dimension size
                 const range_size = if (end > start) end - start else 0;
