@@ -107,7 +107,7 @@ pub fn Element(comptime T: type) type {
             _ = writer;
         }
 
-        pub fn readSlice(slice: []T, reader: *std.io.Reader, type_descr: header.TypeDescriptor) ReadDataError!void {
+        pub fn readSlice(slice: []T, reader: *std.io.Reader, type_descr: header.ElementType) ReadDataError!void {
             _ = slice;
             _ = reader;
             _ = type_descr;
