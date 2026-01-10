@@ -3,6 +3,42 @@ const std = @import("std");
 const array_mod = @import("../array.zig");
 const slice_mod = @import("../slice.zig");
 
+/// Compute the flat array offset for a given multi-dimensional index.
+/// Returns:
+///   - The computed offset as an `isize` if the index is valid
+///   - `null` if the index is invalid (wrong number of dimensions or out of bounds)
+fn strideOffset(dims: []const usize, strides: []const isize, index: []const usize) ?isize {
+    // Dimension mismatch
+    if (index.len != dims.len) return null;
+
+    var offset: isize = 0;
+
+    for (index, dims, strides) |idx, dim, stride| {
+        if (idx >= dim) {
+            // Index out of bounds
+            return null;
+        }
+        // SAFETY: This cast is safe due to the bounds check above (dim fits in isize and idx < dim)
+        const idx_isize: isize = @intCast(idx);
+        offset += idx_isize * stride;
+    }
+
+    return offset;
+}
+
+/// Compute the flat array offset for a given multi-dimensional index without bounds checking.
+///
+/// SAFETY: The caller MUST ensure that all indices are within bounds.
+/// Undefined behavior if any `index[i] >= dims[i]` or if`index.len != dims.len`.
+fn strideOffsetUnchecked(strides: []const isize, index: []const usize) isize {
+    var offset: isize = 0;
+    for (index, strides) |idx, stride| {
+        const idx_isize: isize = @intCast(idx);
+        offset += idx_isize * stride;
+    }
+    return offset;
+}
+
 /// A mutable view into a multi-dimensional array.
 /// The view does NOT own the underlying data buffer or shape metadata.
 /// You can read and write elements through this view.
@@ -20,42 +56,6 @@ pub fn ArrayView(comptime T: type) type {
 
         const Self = @This();
 
-        /// Compute the flat array offset for a given multi-dimensional index.
-        /// Returns:
-        ///   - The computed offset as an isize if the index is valid
-        ///   - null if the index is invalid (wrong number of dimensions or out of bounds)
-        fn strideOffset(self: *const Self, index: []const usize) ?isize {
-            // Dimension mismatch
-            if (index.len != self.dims.len) return null;
-
-            var offset: isize = 0;
-
-            for (index, self.dims, self.strides) |idx, dim, stride| {
-                if (idx >= dim) {
-                    // Index out of bounds
-                    return null;
-                }
-                // SAFETY: This cast is safe due to the bounds check above (dim fits in isize and idx < dim)
-                const idx_isize: isize = @intCast(idx);
-                offset += idx_isize * stride;
-            }
-
-            return offset;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index without bounds checking.
-        ///
-        /// SAFETY: The caller MUST ensure that all indices are within bounds.
-        /// Undefined behavior if any index[i] >= dims[i] or if index.len != dims.len.
-        fn strideOffsetUnchecked(self: *const Self, index: []const usize) isize {
-            var offset: isize = 0;
-            for (index, self.strides) |idx, stride| {
-                const idx_isize: isize = @intCast(idx);
-                offset += idx_isize * stride;
-            }
-            return offset;
-        }
-
         /// Get a pointer to the element at the given multi-dimensional index.
         ///
         /// Returns:
@@ -68,7 +68,11 @@ pub fn ArrayView(comptime T: type) type {
         ///
         /// For safe value access, prefer `get()` and `set()` methods.
         pub fn at(self: *const Self, index: []const usize) ?*T {
-            const offset = self.strideOffset(index) orelse return null;
+            const offset = strideOffset(
+                self.dims,
+                self.strides,
+                index,
+            ) orelse return null;
             return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
 
@@ -80,7 +84,7 @@ pub fn ArrayView(comptime T: type) type {
         /// This function skips all bounds checking for maximum performance.
         /// Use only when you have already validated the indices.
         pub fn atUnchecked(self: *const Self, index: []const usize) *T {
-            const offset = self.strideOffsetUnchecked(index);
+            const offset = strideOffsetUnchecked(self.strides, index);
             return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
 
@@ -377,42 +381,6 @@ pub fn ConstArrayView(comptime T: type) type {
 
         const Self = @This();
 
-        /// Compute the flat array offset for a given multi-dimensional index.
-        /// Returns:
-        ///   - The computed offset as an isize if the index is valid
-        ///   - null if the index is invalid (wrong number of dimensions or out of bounds)
-        fn strideOffset(self: *const Self, index: []const usize) ?isize {
-            // Dimension mismatch
-            if (index.len != self.dims.len) return null;
-
-            var offset: isize = 0;
-
-            for (index, self.dims, self.strides) |idx, dim, stride| {
-                if (idx >= dim) {
-                    // Index out of bounds
-                    return null;
-                }
-                // SAFETY: This cast is safe due to the bounds check above (dim fits in isize and idx < dim)
-                const idx_isize: isize = @intCast(idx);
-                offset += idx_isize * stride;
-            }
-
-            return offset;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index without bounds checking.
-        ///
-        /// SAFETY: The caller MUST ensure that all indices are within bounds.
-        /// Undefined behavior if any index[i] >= dims[i] or if index.len != dims.len.
-        fn strideOffsetUnchecked(self: *const Self, index: []const usize) isize {
-            var offset: isize = 0;
-            for (index, self.strides) |idx, stride| {
-                const idx_isize: isize = @intCast(idx);
-                offset += idx_isize * stride;
-            }
-            return offset;
-        }
-
         /// Get a const pointer to the element at the given multi-dimensional index.
         ///
         /// Returns:
@@ -425,7 +393,11 @@ pub fn ConstArrayView(comptime T: type) type {
         ///
         /// For safe value access, prefer the `get()` method.
         pub fn at(self: *const Self, index: []const usize) ?*const T {
-            const offset = self.strideOffset(index) orelse return null;
+            const offset = strideOffset(
+                self.dims,
+                self.strides,
+                index,
+            ) orelse return null;
             return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
 
@@ -437,7 +409,7 @@ pub fn ConstArrayView(comptime T: type) type {
         /// This function skips all bounds checking for maximum performance.
         /// Use only when you have already validated the indices.
         pub fn atUnchecked(self: *const Self, index: []const usize) *const T {
-            const offset = self.strideOffsetUnchecked(index);
+            const offset = strideOffsetUnchecked(self.strides, index);
             return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
 
