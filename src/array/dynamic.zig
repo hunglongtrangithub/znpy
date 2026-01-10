@@ -3,6 +3,7 @@ const std = @import("std");
 const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
+const array_mod = @import("../array.zig");
 
 /// A multi-dimensional array with dynamic rank.
 /// The view does not own the underlying data buffer.
@@ -117,23 +118,10 @@ pub fn DynamicArray(comptime T: type) type {
         }
 
         /// Get a pointer to the element at the given multi-dimensional index.
+        /// Returns null when index is out of bounds.
         fn at(self: *const Self, index: []const usize) ?*T {
             const offset = self.strideOffset(index) orelse return null;
-
-            // 1. Get the base address as an integer
-            const base_addr = @intFromPtr(self.data_ptr);
-
-            // 2. Calculate the byte-level offset.
-            // We multiply the logical offset by the size of the element.
-            const byte_offset = offset * @as(isize, @intCast(@sizeOf(T)));
-
-            // 3. Use wrapping addition to handle negative or positive offsets.
-            // Bit-casting the signed isize to usize allows the CPU to use
-            // two's-complement arithmetic to "jump" backwards or forwards.
-            const target_addr = base_addr +% @as(usize, @bitCast(byte_offset));
-
-            // 4. Return the resulting pointer
-            return @ptrFromInt(target_addr);
+            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
     };
 }
@@ -217,23 +205,10 @@ pub fn ConstDynamicArray(comptime T: type) type {
         }
 
         /// Get a const pointer to the element at the given multi-dimensional index.
+        /// Returns null when index is out of bounds.
         fn at(self: *const Self, index: []const usize) ?*const T {
             const offset = self.strideOffset(index) orelse return null;
-
-            // 1. Get the base address as an integer
-            const base_addr = @intFromPtr(self.data_ptr);
-
-            // 2. Calculate the byte-level offset.
-            // We multiply the logical offset by the size of the element.
-            const byte_offset = offset * @as(isize, @intCast(@sizeOf(T)));
-
-            // 3. Use wrapping addition to handle negative or positive offsets.
-            // Bit-casting the signed isize to usize allows the CPU to use
-            // two's-complement arithmetic to "jump" backwards or forwards.
-            const target_addr = base_addr +% @as(usize, @bitCast(byte_offset));
-
-            // 4. Return the resulting pointer
-            return @ptrFromInt(target_addr);
+            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
     };
 }

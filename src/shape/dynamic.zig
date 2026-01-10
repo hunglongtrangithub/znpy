@@ -21,6 +21,7 @@ pub const DynamicShape = struct {
 
     pub const InitError = error{ShapeSizeOverflow} || std.mem.Allocator.Error;
 
+    /// Initialize a `DynamicShape` instance, with shape size overflow check and strides computation.
     pub fn init(
         dims: []const usize,
         order: header_mod.Order,

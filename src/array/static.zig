@@ -3,6 +3,7 @@ const std = @import("std");
 const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
+const array_mod = @import("../array.zig");
 
 /// A multi-dimensional array with static rank.
 /// The view does not own the underlying data buffer.
@@ -11,6 +12,7 @@ const elements_mod = @import("../elements.zig");
 /// `T` is the element type.
 /// `rank` is the number of dimensions.
 pub fn StaticArray(comptime T: type, comptime rank: usize) type {
+    // TODO: consider adding a check to reject ranks that are too large, or limit rank to u8?
     const element_type = header_mod.ElementType.fromZigType(T) catch @compileError("Unsupported type for StaticArray");
 
     return struct {
@@ -113,23 +115,10 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         }
 
         /// Get a pointer to the element at the given multi-dimensional index.
+        /// Returns null when index is out of bounds.
         fn at(self: *const Self, index: [rank]usize) ?*T {
             const offset = self.strideOffset(index) orelse return null;
-
-            // 1. Get the base address as an integer
-            const base_addr = @intFromPtr(self.data_ptr);
-
-            // 2. Calculate the byte-level offset.
-            // We multiply the logical offset by the size of the element.
-            const byte_offset = offset * @as(isize, @intCast(@sizeOf(T)));
-
-            // 3. Use wrapping addition to handle negative or positive offsets.
-            // Bit-casting the signed isize to usize allows the CPU to use
-            // two's-complement arithmetic to "jump" backwards or forwards.
-            const target_addr = base_addr +% @as(usize, @bitCast(byte_offset));
-
-            // 4. Return the resulting pointer
-            return @ptrFromInt(target_addr);
+            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
     };
 }
@@ -141,6 +130,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
 /// `T` is the element type.
 /// `rank` is the number of dimensions.
 pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
+    // TODO: consider adding a check to reject ranks that are too large, or limit rank to u8?
     return struct {
         /// The shape of the array (dimensions, strides, order, num_elements)
         shape: shape_mod.StaticShape(rank),
@@ -206,21 +196,7 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
         /// Get a pointer to the element at the given multi-dimensional index.
         fn at(self: *const Self, index: [rank]usize) ?*const T {
             const offset = self.strideOffset(index) orelse return null;
-
-            // 1. Get the base address as an integer
-            const base_addr = @intFromPtr(self.data_ptr);
-
-            // 2. Calculate the byte-level offset.
-            // We multiply the logical offset by the size of the element.
-            const byte_offset = offset * @as(isize, @intCast(@sizeOf(T)));
-
-            // 3. Use wrapping addition to handle negative or positive offsets.
-            // Bit-casting the signed isize to usize allows the CPU to use
-            // two's-complement arithmetic to "jump" backwards or forwards.
-            const target_addr = base_addr +% @as(usize, @bitCast(byte_offset));
-
-            // 4. Return the resulting pointer
-            return @ptrFromInt(target_addr);
+            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
     };
 }
