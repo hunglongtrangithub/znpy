@@ -8,9 +8,7 @@ pub const DynamicShape = struct {
     /// The total number of elements is the product of all dimensions,
     /// which must not overflow `std.math.maxInt(isize)`.
     dims: []const usize,
-    /// The memory order of the array.
-    order: header_mod.Order,
-    /// The strides for indexing into the array. Allocated with same allocator as dims if needed.
+    /// The strides for indexing into the array. Allocated with samelength as dims.
     strides: []const isize,
     /// The total number of elements in the array
     num_elements: usize,
@@ -61,15 +59,8 @@ pub const DynamicShape = struct {
     }
 
     /// Free the memory allocated for the strides.
-    /// Call this when you're done with the DynamicShape.
     pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
         allocator.free(self.strides);
-    }
-
-    /// Get the strides for this shape.
-    /// Returns the pre-computed strides slice.
-    pub fn getStrides(self: *const Self, _: std.mem.Allocator) []const isize {
-        return self.strides;
     }
 
     /// Compute the strides for a given shape and order, allocating memory from the given allocator.
@@ -157,16 +148,15 @@ test "DynamicShape.fromHeader - overflow error" {
     try std.testing.expectError(DynamicShape.FromHeaderError.ShapeSizeOverflow, result);
 }
 
-test "DynamicShape.getStrides - empty shape" {
+test "DynamicShape.strides - empty shape" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{};
     const shape = try DynamicShape.init(&shape_data, .C, .{ .Float64 = null }, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
-    try std.testing.expectEqual(@as(usize, 0), strides.len);
+    try std.testing.expectEqual(@as(usize, 0), shape.strides.len);
 }
 
-test "DynamicShape.getStrides - shape with zero dimension" {
+test "DynamicShape.strides - shape with zero dimension" {
     const allocator = std.testing.allocator;
     var shape_data = [_]usize{ 3, 0, 5 };
     const npy_header = header_mod.Header{
@@ -176,19 +166,19 @@ test "DynamicShape.getStrides - shape with zero dimension" {
     };
     const shape = try DynamicShape.fromHeader(npy_header, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
+    const strides = shape.strides;
     try std.testing.expectEqual(@as(usize, 3), strides.len);
     try std.testing.expectEqual(@as(isize, 0), strides[0]);
     try std.testing.expectEqual(@as(isize, 0), strides[1]);
     try std.testing.expectEqual(@as(isize, 0), strides[2]);
 }
 
-test "DynamicShape.getStrides - C order (2, 3, 4)" {
+test "DynamicShape.strides - C order (2, 3, 4)" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 2, 3, 4 };
     const shape = try DynamicShape.init(&shape_data, .C, .{ .Float64 = null }, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
+    const strides = shape.strides;
     try std.testing.expectEqual(@as(usize, 3), strides.len);
     // C order: strides are (3*4, 4, 1) = (12, 4, 1)
     try std.testing.expectEqual(@as(isize, 12), strides[0]);
@@ -196,12 +186,12 @@ test "DynamicShape.getStrides - C order (2, 3, 4)" {
     try std.testing.expectEqual(@as(isize, 1), strides[2]);
 }
 
-test "DynamicShape.getStrides - F order (2, 3, 4)" {
+test "DynamicShape.strides - F order (2, 3, 4)" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 2, 3, 4 };
     const shape = try DynamicShape.init(&shape_data, .F, .{ .Float64 = null }, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
+    const strides = shape.strides;
     try std.testing.expectEqual(@as(usize, 3), strides.len);
     // F order: strides are (1, 2, 2*3) = (1, 2, 6)
     try std.testing.expectEqual(@as(isize, 1), strides[0]);
@@ -209,56 +199,56 @@ test "DynamicShape.getStrides - F order (2, 3, 4)" {
     try std.testing.expectEqual(@as(isize, 6), strides[2]);
 }
 
-test "DynamicShape.getStrides - C order 1D array" {
+test "DynamicShape.strides - C order 1D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{10};
     const shape = try DynamicShape.init(&shape_data, .C, .{ .Float64 = null }, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
+    const strides = shape.strides;
     try std.testing.expectEqual(@as(usize, 1), strides.len);
     try std.testing.expectEqual(@as(isize, 1), strides[0]);
 }
 
-test "DynamicShape.getStrides - F order 1D array" {
+test "DynamicShape.strides - F order 1D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{10};
     const shape = try DynamicShape.init(&shape_data, .F, .{ .Float64 = null }, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
+    const strides = shape.strides;
     try std.testing.expectEqual(@as(usize, 1), strides.len);
     try std.testing.expectEqual(@as(isize, 1), strides[0]);
 }
 
-test "DynamicShape.getStrides - C order 2D array" {
+test "DynamicShape.strides - C order 2D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 5, 7 };
     const shape = try DynamicShape.init(&shape_data, .C, .{ .Float64 = null }, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
+    const strides = shape.strides;
     try std.testing.expectEqual(@as(usize, 2), strides.len);
     // C order: strides are (7, 1)
     try std.testing.expectEqual(@as(isize, 7), strides[0]);
     try std.testing.expectEqual(@as(isize, 1), strides[1]);
 }
 
-test "DynamicShape.getStrides - F order 2D array" {
+test "DynamicShape.strides - F order 2D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 5, 7 };
     const shape = try DynamicShape.init(&shape_data, .F, .{ .Float64 = null }, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
+    const strides = shape.strides;
     try std.testing.expectEqual(@as(usize, 2), strides.len);
     // F order: strides are (1, 5)
     try std.testing.expectEqual(@as(isize, 1), strides[0]);
     try std.testing.expectEqual(@as(isize, 5), strides[1]);
 }
 
-test "DynamicShape.getStrides - C order 4D array" {
+test "DynamicShape.strides - C order 4D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 2, 3, 4, 5 };
     const shape = try DynamicShape.init(&shape_data, .C, .{ .Float64 = null }, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
+    const strides = shape.strides;
     try std.testing.expectEqual(@as(usize, 4), strides.len);
     // C order: strides are (3*4*5, 4*5, 5, 1) = (60, 20, 5, 1)
     try std.testing.expectEqual(@as(isize, 60), strides[0]);
@@ -267,12 +257,12 @@ test "DynamicShape.getStrides - C order 4D array" {
     try std.testing.expectEqual(@as(isize, 1), strides[3]);
 }
 
-test "DynamicShape.getStrides - F order 4D array" {
+test "DynamicShape.strides - F order 4D array" {
     const allocator = std.testing.allocator;
     const shape_data = [_]usize{ 2, 3, 4, 5 };
     const shape = try DynamicShape.init(&shape_data, .F, .{ .Float64 = null }, allocator);
     defer shape.deinit(allocator);
-    const strides = shape.getStrides(allocator);
+    const strides = shape.strides;
     try std.testing.expectEqual(@as(usize, 4), strides.len);
     // F order: strides are (1, 2, 2*3, 2*3*4) = (1, 2, 6, 24)
     try std.testing.expectEqual(@as(isize, 1), strides[0]);

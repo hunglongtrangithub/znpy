@@ -113,6 +113,7 @@ pub const SliceReader = struct {
 
     pub const Error = error{NotEnoughBytes};
 
+    /// Initialize the slice reader with position 0.
     pub fn init(slice: []const u8) Self {
         return .{ .slice = slice, .pos = 0 };
     }

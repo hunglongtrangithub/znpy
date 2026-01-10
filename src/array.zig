@@ -1,3 +1,4 @@
+//! Module for array types: static-ranked vs dynamic-ranked arrays holding mutable vs mutable data.
 const std = @import("std");
 
 const dynamic = @import("array/dynamic.zig");

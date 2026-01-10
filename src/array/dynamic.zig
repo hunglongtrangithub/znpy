@@ -4,7 +4,7 @@ const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 
-/// A view into a multi-dimensional array with dynamic rank.
+/// A multi-dimensional array with dynamic rank.
 /// The view does not own the underlying data buffer.
 /// You can read and write elements through this view.
 ///
@@ -181,8 +181,7 @@ pub fn ConstDynamicArray(comptime T: type) type {
             };
         }
 
-        /// Deinitialize the `ArrayView`, freeing any allocated resources.
-        /// Only needed for dynamic rank arrays.
+        /// Deallocate the array by deallocating the shape data
         pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
             self.shape.deinit(allocator);
         }

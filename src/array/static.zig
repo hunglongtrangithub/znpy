@@ -1,9 +1,10 @@
 const std = @import("std");
+
 const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 
-/// A view into a multi-dimensional array with static rank.
+/// A multi-dimensional array with static rank.
 /// The view does not own the underlying data buffer.
 /// You can read and write elements through this view.
 ///
