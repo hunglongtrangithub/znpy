@@ -349,7 +349,7 @@ pub const Header = struct {
         try shape_str.appendSlice(allocator, "(");
         switch (self.shape.len) {
             0 => {
-                try shape_str.appendSlice(allocator, ",)");
+                try shape_str.appendSlice(allocator, ")");
             },
             1 => {
                 const closing_str = try std.fmt.allocPrint(allocator, "{d},)", .{self.shape[0]});
@@ -394,7 +394,7 @@ test {
     _ = lex;
 }
 
-test "Header.toPythonString" {
+test "Header.toPythonString normal case" {
     var allocator = std.testing.allocator;
 
     const shape_data = [_]usize{ 3, 4, 5 };
@@ -408,5 +408,58 @@ test "Header.toPythonString" {
     defer allocator.free(header_str);
 
     const expected_str = "{'descr': '<i4', 'fortran_order': False, 'shape': (3, 4, 5), }";
+    try std.testing.expectEqualSlices(u8, expected_str, header_str);
+}
+
+test "Header.toPythonString one-dimensional case" {
+    var allocator = std.testing.allocator;
+
+    const shape_data = [_]usize{10};
+    const header = Header{
+        .shape = shape_data[0..],
+        .descr = ElementType.fromString(">u2") catch unreachable,
+        .order = .C,
+    };
+
+    const header_str = try header.toPythonString(allocator);
+    defer allocator.free(header_str);
+
+    const expected_str = "{'descr': '>u2', 'fortran_order': False, 'shape': (10,), }";
+    try std.testing.expectEqualSlices(u8, expected_str, header_str);
+}
+
+test "Header.toPythonString scalar case" {
+    var allocator = std.testing.allocator;
+
+    const shape_data = [_]usize{};
+    const header = Header{
+        .shape = shape_data[0..],
+        .descr = ElementType.fromString("<f8") catch unreachable,
+        .order = .F,
+    };
+
+    const header_str = try header.toPythonString(allocator);
+    defer allocator.free(header_str);
+
+    const expected_str = "{'descr': '<f8', 'fortran_order': True, 'shape': (), }";
+    try std.testing.expectEqualSlices(u8, expected_str, header_str);
+}
+
+test "Header.toPythonString native endianness" {
+    var allocator = std.testing.allocator;
+
+    const shape_data = [_]usize{ 2, 2 };
+
+    const header = Header{
+        .shape = shape_data[0..],
+        .descr = ElementType.fromString("=f8") catch unreachable,
+        .order = .C,
+    };
+
+    const header_str = try header.toPythonString(allocator);
+    defer allocator.free(header_str);
+
+    const expected_str = "{'descr': '=f8', 'fortran_order': False, 'shape': (2, 2), }";
+
     try std.testing.expectEqualSlices(u8, expected_str, header_str);
 }
