@@ -117,10 +117,45 @@ pub fn DynamicArray(comptime T: type) type {
             return offset;
         }
 
+        /// Compute the flat array offset for a given multi-dimensional index without bounds checking.
+        ///
+        /// SAFETY: The caller MUST ensure that all indices are within bounds.
+        /// Undefined behavior if any index[i] >= dims[i] or if index.len != dims.len.
+        fn strideOffsetUnchecked(self: *const Self, index: []const usize) isize {
+            var offset: isize = 0;
+            for (index, self.shape.strides) |idx, stride| {
+                const idx_isize: isize = @intCast(idx);
+                offset += idx_isize * stride;
+            }
+            return offset;
+        }
+
         /// Get a pointer to the element at the given multi-dimensional index.
-        /// Returns null when index is out of bounds.
-        fn at(self: *const Self, index: []const usize) ?*T {
+        ///
+        /// Returns:
+        /// - A pointer to the element if the index is valid
+        /// - `null` if the index is out of bounds
+        ///
+        /// SAFETY:
+        /// - The returned pointer is only valid as long as the array exists
+        /// - Do not store the pointer beyond the array's lifetime
+        /// - Do not use the pointer after the array has been `deinit()`ed
+        ///
+        /// For safe value access, prefer `get()` and `set()` methods.
+        pub fn at(self: *const Self, index: []const usize) ?*T {
             const offset = self.strideOffset(index) orelse return null;
+            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+        }
+
+        /// Get a pointer to the element at the given multi-dimensional index without bounds checking.
+        ///
+        /// SAFETY: The caller MUST ensure that all indices are within bounds.
+        /// Undefined behavior if any index[i] >= dims[i] or if index.len != dims.len.
+        ///
+        /// This function skips all bounds checking for maximum performance.
+        /// Use only when you have already validated the indices.
+        pub fn atUnchecked(self: *const Self, index: []const usize) *T {
+            const offset = self.strideOffsetUnchecked(index);
             return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
     };
@@ -204,11 +239,173 @@ pub fn ConstDynamicArray(comptime T: type) type {
             return offset;
         }
 
+        /// Compute the flat array offset for a given multi-dimensional index without bounds checking.
+        ///
+        /// SAFETY: The caller MUST ensure that all indices are within bounds.
+        /// Undefined behavior if any index[i] >= dims[i] or if index.len != dims.len.
+        fn strideOffsetUnchecked(self: *const Self, index: []const usize) isize {
+            var offset: isize = 0;
+            for (index, self.shape.strides) |idx, stride| {
+                const idx_isize: isize = @intCast(idx);
+                offset += idx_isize * stride;
+            }
+            return offset;
+        }
+
         /// Get a const pointer to the element at the given multi-dimensional index.
-        /// Returns null when index is out of bounds.
-        fn at(self: *const Self, index: []const usize) ?*const T {
+        ///
+        /// Returns:
+        /// - A pointer to the element if the index is valid
+        /// - `null` if the index is out of bounds
+        ///
+        /// SAFETY:
+        /// - The returned pointer is only valid as long as the array exists
+        /// - Do not store the pointer beyond the array's lifetime
+        /// - Do not use the pointer after the underlying buffer is freed
+        ///
+        /// For safe value access, prefer the `get()` method.
+        pub fn at(self: *const Self, index: []const usize) ?*const T {
             const offset = self.strideOffset(index) orelse return null;
             return array_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
+
+        /// Get a const pointer to the element at the given multi-dimensional index without bounds checking.
+        ///
+        /// SAFETY: The caller MUST ensure that all indices are within bounds.
+        /// Undefined behavior if any index[i] >= dims[i] or if index.len != dims.len.
+        ///
+        /// This function skips all bounds checking for maximum performance.
+        /// Use only when you have already validated the indices.
+        pub fn atUnchecked(self: *const Self, index: []const usize) *const T {
+            const offset = self.strideOffsetUnchecked(index);
+            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+        }
     };
+}
+
+test "DynamicArray - public at() function" {
+    const allocator = std.testing.allocator;
+    const Array = DynamicArray(f64);
+
+    var data = [_]f64{ 1.5, 2.5, 3.5, 4.5, 5.5, 6.5 };
+    const dims = [_]usize{ 2, 3 };
+    const shape = try shape_mod.DynamicShape.init(
+        &dims,
+        .C,
+        header_mod.ElementType{ .Float64 = null },
+        allocator,
+    );
+    defer shape.deinit(allocator);
+
+    const array = Array{
+        .shape = shape,
+        .data_buffer = &data,
+        .data_ptr = &data,
+    };
+
+    // Test that at() is now public and returns correct pointers
+    const ptr00 = array.at(&[_]usize{ 0, 0 });
+    try std.testing.expect(ptr00 != null);
+    try std.testing.expectEqual(@as(f64, 1.5), ptr00.?.*);
+
+    const ptr12 = array.at(&[_]usize{ 1, 2 });
+    try std.testing.expect(ptr12 != null);
+    try std.testing.expectEqual(@as(f64, 6.5), ptr12.?.*);
+
+    // Test bounds checking
+    try std.testing.expectEqual(@as(?*f64, null), array.at(&[_]usize{ 2, 0 }));
+    try std.testing.expectEqual(@as(?*f64, null), array.at(&[_]usize{ 0, 3 }));
+
+    // Test dimension mismatch
+    try std.testing.expectEqual(@as(?*f64, null), array.at(&[_]usize{0}));
+}
+
+test "DynamicArray - atUnchecked() for performance" {
+    const allocator = std.testing.allocator;
+    const Array = DynamicArray(i32);
+
+    var data = [_]i32{ 10, 20, 30, 40, 50 };
+    const dims = [_]usize{5};
+    const shape = try shape_mod.DynamicShape.init(
+        &dims,
+        .C,
+        header_mod.ElementType{ .Int32 = null },
+        allocator,
+    );
+    defer shape.deinit(allocator);
+
+    const array = Array{
+        .shape = shape,
+        .data_buffer = &data,
+        .data_ptr = &data,
+    };
+
+    // atUnchecked skips bounds checking
+    const ptr0 = array.atUnchecked(&[_]usize{0});
+    try std.testing.expectEqual(@as(i32, 10), ptr0.*);
+
+    const ptr4 = array.atUnchecked(&[_]usize{4});
+    try std.testing.expectEqual(@as(i32, 50), ptr4.*);
+
+    // Can modify through the pointer
+    ptr0.* = 100;
+    try std.testing.expectEqual(@as(i32, 100), data[0]);
+}
+
+test "ConstDynamicArray - public at() returns const pointer" {
+    const allocator = std.testing.allocator;
+    const ConstArray = ConstDynamicArray(u32);
+
+    const data = [_]u32{ 1, 2, 3, 4 };
+    const dims = [_]usize{ 2, 2 };
+    const shape = try shape_mod.DynamicShape.init(
+        &dims,
+        .C,
+        header_mod.ElementType{ .UInt32 = null },
+        allocator,
+    );
+    defer shape.deinit(allocator);
+
+    const array = ConstArray{
+        .shape = shape,
+        .data_buffer = &data,
+        .data_ptr = &data,
+    };
+
+    // Verify at() returns const pointer
+    const ptr = array.at(&[_]usize{ 0, 0 });
+    try std.testing.expect(ptr != null);
+    try std.testing.expectEqual(@as(u32, 1), ptr.?.*);
+
+    // Verify return type is *const u32
+    const ptr_type = @TypeOf(ptr.?);
+    try std.testing.expect(ptr_type == *const u32);
+}
+
+test "ConstDynamicArray - atUnchecked() returns const pointer" {
+    const allocator = std.testing.allocator;
+    const ConstArray = ConstDynamicArray(i8);
+
+    const data = [_]i8{ 10, 20, 30, 40 };
+    const dims = [_]usize{ 2, 2 };
+    const shape = try shape_mod.DynamicShape.init(
+        &dims,
+        .C,
+        header_mod.ElementType.Int8,
+        allocator,
+    );
+    defer shape.deinit(allocator);
+
+    const array = ConstArray{
+        .shape = shape,
+        .data_buffer = &data,
+        .data_ptr = &data,
+    };
+
+    const ptr = array.atUnchecked(&[_]usize{ 1, 1 });
+    try std.testing.expectEqual(@as(i8, 40), ptr.*);
+
+    // Verify return type is *const i8
+    const ptr_type = @TypeOf(ptr);
+    try std.testing.expect(ptr_type == *const i8);
 }
