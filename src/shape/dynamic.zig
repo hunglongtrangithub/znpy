@@ -12,6 +12,8 @@ pub const DynamicShape = struct {
     strides: []const isize,
     /// The total number of elements in the array
     num_elements: usize,
+    /// The memory order of the array.
+    order: header_mod.Order,
 
     const Self = @This();
 

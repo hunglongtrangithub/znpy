@@ -9,12 +9,12 @@ pub fn StaticShape(comptime rank: usize) type {
         /// The total number of elements is the product of all dimensions,
         /// which must not overflow `std.math.maxInt(isize)`.
         dims: [rank]usize,
-        /// The memory order of the array.
-        order: header_mod.Order,
         /// The strides for indexing into the array
         strides: [rank]isize,
         /// The total number of elements in the array
         num_elements: usize,
+        /// The memory order of the array.
+        order: header_mod.Order,
 
         const Self = @This();
 
