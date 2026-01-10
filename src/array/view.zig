@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const array_mod = @import("../array.zig");
+const slice_mod = @import("../slice.zig");
 
 /// A mutable view into a multi-dimensional array.
 /// The view does NOT own the underlying data buffer or shape metadata.
@@ -96,10 +97,41 @@ pub fn ArrayView(comptime T: type) type {
             const ptr = self.at(index).?;
             ptr.* = value;
         }
+
+        /// Create a sliced view from this view.
+        /// The returned view has the same mutability as the original.
+        ///
+        /// The caller owns the returned view's dims and strides arrays.
+        pub fn slice(
+            self: *const Self,
+            slices: []const slice_mod.Slice,
+            allocator: std.mem.Allocator,
+        ) (slice_mod.SliceError || std.mem.Allocator.Error)!Self {
+            const new_dims, const new_strides, const offset = try slice_mod.applySlices(
+                self.dims,
+                self.strides,
+                slices,
+                allocator,
+            );
+
+            // Calculate new data pointer
+            const new_data_ptr_single = array_mod.ptrFromOffset(
+                T,
+                self.data_ptr,
+                offset,
+            );
+            const new_data_ptr: [*]T = @ptrCast(new_data_ptr_single);
+
+            return Self{
+                .dims = new_dims,
+                .strides = new_strides,
+                .data_ptr = new_data_ptr,
+            };
+        }
     };
 }
 
-test ArrayView {
+test "ArrayView - standalone use" {
     var data = [_]f32{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
     const dims = [_]usize{ 2, 3 };
     const strides = [_]isize{ 3, 1 }; // C-order strides
@@ -130,6 +162,202 @@ test ArrayView {
     // Test bounds checking
     try std.testing.expectEqual(@as(?f32, null), view.get(&[_]usize{ 2, 0 }));
     try std.testing.expectEqual(@as(?f32, null), view.get(&[_]usize{ 0, 3 }));
+}
+
+test "ArrayView - slice with Index" {
+    const allocator = std.testing.allocator;
+    var data = [_]f32{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
+    const dims = [_]usize{ 2, 3 };
+    const strides = [_]isize{ 3, 1 }; // C-order: [[1,2,3], [4,5,6]]
+
+    const view = ArrayView(f32){
+        .dims = &dims,
+        .strides = &strides,
+        .data_ptr = &data,
+    };
+
+    // Slice first row: view[0, :]
+    const slices1 = [_]slice_mod.Slice{
+        .{ .Index = 0 },
+        .{ .Range = .{} },
+    };
+    const sliced1 = try view.slice(&slices1, allocator);
+    defer allocator.free(sliced1.dims);
+    defer allocator.free(sliced1.strides);
+
+    try std.testing.expectEqual(@as(usize, 1), sliced1.dims.len);
+    try std.testing.expectEqual(@as(usize, 3), sliced1.dims[0]);
+    try std.testing.expectEqual(@as(?f32, 1.0), sliced1.get(&[_]usize{0}));
+    try std.testing.expectEqual(@as(?f32, 2.0), sliced1.get(&[_]usize{1}));
+    try std.testing.expectEqual(@as(?f32, 3.0), sliced1.get(&[_]usize{2}));
+}
+
+test "ArrayView - slice with Range and step" {
+    const allocator = std.testing.allocator;
+    var data = [_]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0 };
+    const dims = [_]usize{6};
+    const strides = [_]isize{1};
+
+    const view = ArrayView(f32){
+        .dims = &dims,
+        .strides = &strides,
+        .data_ptr = &data,
+    };
+
+    // Slice with step: view[1:5:2] -> [1.0, 3.0]
+    const slices = [_]slice_mod.Slice{
+        .{ .Range = .{ .start = 1, .end = 5, .step = 2 } },
+    };
+    const sliced = try view.slice(&slices, allocator);
+    defer allocator.free(sliced.dims);
+    defer allocator.free(sliced.strides);
+
+    try std.testing.expectEqual(@as(usize, 1), sliced.dims.len);
+    try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+    try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&[_]usize{0}));
+    try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&[_]usize{1}));
+}
+
+test "ArrayView - slice with negative step" {
+    const allocator = std.testing.allocator;
+
+    // Create a 1D array [0, 1, 2, 3]
+    var data = [_]f32{ 0, 1, 2, 3 };
+    var dims = [_]usize{4};
+    var strides = [_]isize{1};
+
+    const view = ArrayView(f32){
+        .dims = &dims,
+        .strides = &strides,
+        .data_ptr = &data,
+    };
+
+    // Test 1: arr.slice(s![1..3;-1]) should give [2, 1]
+    // With negative step, we go from end-1 backwards to start
+    {
+        const slices = [_]slice_mod.Slice{
+            .{ .Range = .{ .start = 1, .end = 3, .step = -1 } },
+        };
+        const sliced = try view.slice(&slices, allocator);
+        defer allocator.free(sliced.dims);
+        defer allocator.free(sliced.strides);
+
+        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+        try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&.{0}));
+        try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
+    }
+
+    // Test 2: arr.slice(s![1..;-2]) should give [3, 1]
+    // Range from 1 to end (4), step -2, starts at index 3
+    {
+        const slices = [_]slice_mod.Slice{
+            .{ .Range = .{ .start = 1, .end = null, .step = -2 } },
+        };
+        const sliced = try view.slice(&slices, allocator);
+        defer allocator.free(sliced.dims);
+        defer allocator.free(sliced.strides);
+
+        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+        try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
+        try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
+    }
+
+    // Test 3: arr.slice(s![0..4;-2]) should give [3, 1]
+    {
+        const slices = [_]slice_mod.Slice{
+            .{ .Range = .{ .start = 0, .end = 4, .step = -2 } },
+        };
+        const sliced = try view.slice(&slices, allocator);
+        defer allocator.free(sliced.dims);
+        defer allocator.free(sliced.strides);
+
+        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+        try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
+        try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
+    }
+
+    // Test 4: arr.slice(s![0..;-2]) should give [3, 1]
+    {
+        const slices = [_]slice_mod.Slice{
+            .{ .Range = .{ .start = 0, .end = null, .step = -2 } },
+        };
+        const sliced = try view.slice(&slices, allocator);
+        defer allocator.free(sliced.dims);
+        defer allocator.free(sliced.strides);
+
+        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+        try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
+        try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
+    }
+
+    // Test 5: arr.slice(s![..;-2]) should give [3, 1] (start defaults to 0)
+    {
+        const slices = [_]slice_mod.Slice{
+            .{ .Range = .{ .start = 0, .end = null, .step = -2 } },
+        };
+        const sliced = try view.slice(&slices, allocator);
+        defer allocator.free(sliced.dims);
+        defer allocator.free(sliced.strides);
+
+        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+        try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
+        try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
+    }
+}
+
+test "ArrayView - slice with NewAxis" {
+    const allocator = std.testing.allocator;
+    var data = [_]f32{ 1.0, 2.0, 3.0 };
+    const dims = [_]usize{3};
+    const strides = [_]isize{1};
+
+    const view = ArrayView(f32){
+        .dims = &dims,
+        .strides = &strides,
+        .data_ptr = &data,
+    };
+
+    // Add new axis: view[newaxis, :] -> shape (1, 3)
+    const slices = [_]slice_mod.Slice{
+        .NewAxis,
+        .{ .Range = .{} },
+    };
+    const sliced = try view.slice(&slices, allocator);
+    defer allocator.free(sliced.dims);
+    defer allocator.free(sliced.strides);
+
+    try std.testing.expectEqual(@as(usize, 2), sliced.dims.len);
+    try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
+    try std.testing.expectEqual(@as(usize, 3), sliced.dims[1]);
+    try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&[_]usize{ 0, 0 }));
+    try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&[_]usize{ 0, 1 }));
+    try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&[_]usize{ 0, 2 }));
+}
+
+test "ArrayView - slice mutability preserved" {
+    const allocator = std.testing.allocator;
+    var data = [_]f32{ 1.0, 2.0, 3.0, 4.0 };
+    const dims = [_]usize{ 2, 2 };
+    const strides = [_]isize{ 2, 1 };
+
+    const view = ArrayView(f32){
+        .dims = &dims,
+        .strides = &strides,
+        .data_ptr = &data,
+    };
+
+    // Slice and mutate
+    const slices = [_]slice_mod.Slice{
+        .{ .Index = 0 },
+        .{ .Range = .{} },
+    };
+    const sliced = try view.slice(&slices, allocator);
+    defer allocator.free(sliced.dims);
+    defer allocator.free(sliced.strides);
+
+    // Mutate through sliced view
+    sliced.set(&[_]usize{0}, 99.0);
+    try std.testing.expectEqual(@as(f32, 99.0), data[0]);
 }
 
 /// An immutable view into a multi-dimensional array.
@@ -218,6 +446,37 @@ pub fn ConstArrayView(comptime T: type) type {
         pub fn get(self: *const Self, index: []const usize) ?T {
             const ptr = self.at(index) orelse return null;
             return ptr.*;
+        }
+
+        /// Create a sliced view from this view.
+        /// The returned view has the same mutability as the original.
+        ///
+        /// The caller owns the returned view's dims and strides arrays.
+        pub fn slice(
+            self: *const Self,
+            slices: []const slice_mod.Slice,
+            allocator: std.mem.Allocator,
+        ) (slice_mod.SliceError || std.mem.Allocator.Error)!Self {
+            const new_dims, const new_strides, const offset = try slice_mod.applySlices(
+                self.dims,
+                self.strides,
+                slices,
+                allocator,
+            );
+
+            // Calculate new data pointer
+            const new_data_ptr_single = array_mod.ptrFromOffset(
+                T,
+                self.data_ptr,
+                offset,
+            );
+            const new_data_ptr: [*]const T = @ptrCast(new_data_ptr_single);
+
+            return Self{
+                .dims = new_dims,
+                .strides = new_strides,
+                .data_ptr = new_data_ptr,
+            };
         }
     };
 }
