@@ -4,6 +4,7 @@ const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 const array_mod = @import("../array.zig");
+const view_mod = @import("./view.zig");
 
 /// A multi-dimensional array with static rank.
 /// The view does not own the underlying data buffer.
@@ -20,8 +21,6 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         shape: shape_mod.StaticShape(rank),
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []T,
-        /// Pointer to "Logical Index 0" of the array (may differ from data_buffer.ptr for negative strides)
-        data_ptr: [*]T,
 
         const Self = @This();
 
@@ -48,7 +47,6 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
             return Self{
                 .shape = shape,
                 .data_buffer = data_buffer,
-                .data_ptr = data_buffer.ptr,
             };
         }
 
@@ -78,52 +76,16 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
             return Self{
                 .shape = shape,
                 .data_buffer = data_buffer,
-                .data_ptr = data_buffer.ptr,
             };
         }
 
-        /// Set the element at the given multi-dimensional index.
-        /// Panics if the index is out of bounds.
-        pub fn set(self: *Self, index: [rank]usize, value: T) void {
-            const ptr = self.at(index).?;
-            ptr.* = value;
-        }
-
-        /// Get the element at the given multi-dimensional index.
-        /// Returns null if the index is out of bounds.
-        pub fn get(self: *const Self, index: [rank]usize) ?T {
-            const ptr = self.at(index) orelse return null;
-            return ptr.*;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index.
-        /// Returns:
-        ///   - The computed offset as an isize if the index is valid
-        ///   - null if the index is invalid (wrong number of dimensions or out of bounds)
-        fn strideOffset(self: *const Self, index: [rank]usize) ?isize {
-            var offset: isize = 0;
-
-            inline for (0..rank) |i| {
-                if (index[i] >= self.shape.dims[i]) {
-                    // Index out of bounds
-                    return null;
-                }
-                // SAFETY: This cast is safe due to the bounds check above (dim fits in isize and idx < dim)
-                offset += @as(isize, @intCast(index[i])) * self.shape.strides[i];
-            }
-            return offset;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index without bounds checking.
-        ///
-        /// SAFETY: The caller MUST ensure that all indices are within bounds.
-        /// Undefined behavior if any index[i] >= dims[i].
-        fn strideOffsetUnchecked(self: *const Self, index: [rank]usize) isize {
-            var offset: isize = 0;
-            inline for (0..rank) |i| {
-                offset += @as(isize, @intCast(index[i])) * self.shape.strides[i];
-            }
-            return offset;
+        /// Create a view of this array.
+        fn asView(self: *const Self) view_mod.ArrayView(T) {
+            return .{
+                .dims = &self.shape.dims,
+                .strides = &self.shape.strides,
+                .data_ptr = self.data_buffer.ptr,
+            };
         }
 
         /// Get a pointer to the element at the given multi-dimensional index.
@@ -139,8 +101,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         ///
         /// For safe value access, prefer `get()` and `set()` methods.
         pub fn at(self: *const Self, index: [rank]usize) ?*T {
-            const offset = self.strideOffset(index) orelse return null;
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return self.asView().at(&index);
         }
 
         /// Get a pointer to the element at the given multi-dimensional index without bounds checking.
@@ -151,8 +112,19 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         /// This function skips all bounds checking for maximum performance.
         /// Use only when you have already validated the indices.
         pub fn atUnchecked(self: *const Self, index: [rank]usize) *T {
-            const offset = self.strideOffsetUnchecked(index);
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return self.asView().atUnchecked(&index);
+        }
+
+        /// Get the element at the given multi-dimensional index.
+        /// Returns null if the index is out of bounds.
+        pub fn get(self: *const Self, index: [rank]usize) ?T {
+            return self.asView().get(&index);
+        }
+
+        /// Set the element at the given multi-dimensional index.
+        /// Panics if the index is out of bounds.
+        pub fn set(self: *Self, index: [rank]usize, value: T) void {
+            self.asView().set(&index, value);
         }
     };
 }
@@ -170,8 +142,6 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
         shape: shape_mod.StaticShape(rank),
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []const T,
-        /// Pointer to "Logical Index 0" of the array (may differ from data_buffer.ptr for negative strides)
-        data_ptr: [*]const T,
 
         const Self = @This();
 
@@ -198,45 +168,16 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
             return Self{
                 .shape = shape,
                 .data_buffer = data_buffer,
-                .data_ptr = data_buffer.ptr,
             };
         }
 
-        /// Get the element at the given multi-dimensional index.
-        /// Returns null if the index is out of bounds.
-        pub fn get(self: *const Self, index: [rank]usize) ?T {
-            const ptr = self.at(index) orelse return null;
-            return ptr.*;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index.
-        /// Returns:
-        ///   - The computed offset as an isize if the index is valid
-        ///   - null if the index is invalid (wrong number of dimensions or out of bounds)
-        fn strideOffset(self: *const Self, index: [rank]usize) ?isize {
-            var offset: isize = 0;
-
-            inline for (0..rank) |i| {
-                if (index[i] >= self.shape.dims[i]) {
-                    // Index out of bounds
-                    return null;
-                }
-                // SAFETY: This cast is safe due to the bounds check above (dim fits in isize and idx < dim)
-                offset += @as(isize, @intCast(index[i])) * self.shape.strides[i];
-            }
-            return offset;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index without bounds checking.
-        ///
-        /// SAFETY: The caller MUST ensure that all indices are within bounds.
-        /// Undefined behavior if any index[i] >= dims[i].
-        fn strideOffsetUnchecked(self: *const Self, index: [rank]usize) isize {
-            var offset: isize = 0;
-            inline for (0..rank) |i| {
-                offset += @as(isize, @intCast(index[i])) * self.shape.strides[i];
-            }
-            return offset;
+        /// Create a const view of this array for indexing operations.
+        fn asView(self: *const Self) view_mod.ConstArrayView(T) {
+            return .{
+                .dims = &self.shape.dims,
+                .strides = &self.shape.strides,
+                .data_ptr = self.data_buffer.ptr,
+            };
         }
 
         /// Get a const pointer to the element at the given multi-dimensional index.
@@ -252,8 +193,7 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
         ///
         /// For safe value access, prefer the `get()` method.
         pub fn at(self: *const Self, index: [rank]usize) ?*const T {
-            const offset = self.strideOffset(index) orelse return null;
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return self.asView().at(&index);
         }
 
         /// Get a const pointer to the element at the given multi-dimensional index without bounds checking.
@@ -264,8 +204,13 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
         /// This function skips all bounds checking for maximum performance.
         /// Use only when you have already validated the indices.
         pub fn atUnchecked(self: *const Self, index: [rank]usize) *const T {
-            const offset = self.strideOffsetUnchecked(index);
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return self.asView().atUnchecked(&index);
+        }
+
+        /// Get the element at the given multi-dimensional index.
+        /// Returns null if the index is out of bounds.
+        pub fn get(self: *const Self, index: [rank]usize) ?T {
+            return self.asView().get(&index);
         }
     };
 }
@@ -283,7 +228,6 @@ test "StaticArrayView(f64, 2) - basic 2D array" {
             .num_elements = 6,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // Test element access
@@ -312,7 +256,6 @@ test "StaticArrayView(i32, 3) - 3D array C order" {
             .num_elements = 24,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // Test a few elements
@@ -340,7 +283,6 @@ test "StaticArrayView(f32, 2) - Fortran order strides" {
             .num_elements = 12,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // In Fortran order, data is column-major
@@ -362,7 +304,6 @@ test "StaticArrayView(i32, 1) - 1D array" {
             .num_elements = 5,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     try std.testing.expectEqual(@as(i32, 10), view.at([_]usize{0}).?.*);
@@ -384,7 +325,6 @@ test "StaticArrayView(f64, 2) - out of bounds access" {
             .num_elements = 4,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // Valid access
@@ -409,7 +349,6 @@ test "StaticArrayView(bool, 2) - boolean array" {
             .num_elements = 4,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     try std.testing.expectEqual(true, view.at([_]usize{ 0, 0 }).?.*);
@@ -435,7 +374,6 @@ test "StaticArrayView(i32, 4) - 4D array" {
             .num_elements = 16,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     try std.testing.expectEqual(@as(i32, 0), view.at([_]usize{ 0, 0, 0, 0 }).?.*);
@@ -456,7 +394,6 @@ test "StaticArrayView(u8, 2) - modification through pointer" {
             .num_elements = 6,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // Modify through the view
@@ -481,7 +418,6 @@ test "StaticArrayView(i16, 3) - single element in each dimension" {
             .num_elements = 1,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     try std.testing.expectEqual(@as(i16, 42), view.at([_]usize{ 0, 0, 0 }).?.*);
@@ -504,7 +440,6 @@ test "StaticArray - atUnchecked() for performance" {
             .num_elements = 5,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // atUnchecked skips bounds checking
@@ -531,7 +466,6 @@ test "ConstStaticArray - at() returns const pointer" {
             .num_elements = 4,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // Verify at() returns const pointer
@@ -556,7 +490,6 @@ test "ConstStaticArray - atUnchecked() returns const pointer" {
             .num_elements = 4,
         },
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     const ptr = array.atUnchecked([_]usize{ 1, 1 });

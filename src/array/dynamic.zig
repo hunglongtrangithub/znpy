@@ -4,10 +4,11 @@ const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 const array_mod = @import("../array.zig");
+const view_mod = @import("./view.zig");
 
-/// A multi-dimensional array with dynamic rank.
-/// The view does not own the underlying data buffer.
-/// You can read and write elements through this view.
+/// A multi-dimensional array with dynamic rank that owns its data.
+/// This array owns the data buffer and will free it on deinit.
+/// You can read and write elements through this array.
 ///
 /// `T` is the element type.
 pub fn DynamicArray(comptime T: type) type {
@@ -17,8 +18,6 @@ pub fn DynamicArray(comptime T: type) type {
         shape: shape_mod.DynamicShape,
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []T,
-        /// Pointer to "Logical Index 0" of the array (may differ from data_buffer.ptr for negative strides)
-        data_ptr: [*]T,
 
         const Self = @This();
 
@@ -46,7 +45,6 @@ pub fn DynamicArray(comptime T: type) type {
             return Self{
                 .shape = shape,
                 .data_buffer = data_buffer,
-                .data_ptr = data_buffer.ptr,
             };
         }
 
@@ -80,54 +78,13 @@ pub fn DynamicArray(comptime T: type) type {
             };
         }
 
-        /// Set the element at the given multi-dimensional index.
-        /// Panics if the index is out of bounds.
-        pub fn set(self: *const Self, index: []const usize, value: T) void {
-            const ptr = self.at(index).?;
-            ptr.* = value;
-        }
-
-        /// Get the element at the given multi-dimensional index.
-        /// Returns null if the index is out of bounds.
-        pub fn get(self: *const Self, index: []const usize) ?T {
-            const ptr = self.at(index) orelse return null;
-            return ptr.*;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index.
-        /// Returns:
-        ///   - The computed offset as an isize if the index is valid
-        ///   - null if the index is invalid (wrong number of dimensions or out of bounds)
-        fn strideOffset(self: *const Self, index: []const usize) ?isize {
-            // Dimension mismatch
-            if (index.len != self.shape.dims.len) return null;
-
-            var offset: isize = 0;
-
-            for (index, self.shape.dims, self.shape.strides) |idx, dim, stride| {
-                if (idx >= dim) {
-                    // Index out of bounds
-                    return null;
-                }
-                // SAFETY: This cast is safe due to the bounds check above (dim fits in isize and idx < dim)
-                const idx_isize: isize = @intCast(idx);
-                offset += idx_isize * stride;
-            }
-
-            return offset;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index without bounds checking.
-        ///
-        /// SAFETY: The caller MUST ensure that all indices are within bounds.
-        /// Undefined behavior if any index[i] >= dims[i] or if index.len != dims.len.
-        fn strideOffsetUnchecked(self: *const Self, index: []const usize) isize {
-            var offset: isize = 0;
-            for (index, self.shape.strides) |idx, stride| {
-                const idx_isize: isize = @intCast(idx);
-                offset += idx_isize * stride;
-            }
-            return offset;
+        /// Create a view of this array.
+        fn asView(self: *const Self) view_mod.ArrayView(T) {
+            return .{
+                .dims = self.shape.dims,
+                .strides = self.shape.strides,
+                .data_ptr = self.data_buffer.ptr,
+            };
         }
 
         /// Get a pointer to the element at the given multi-dimensional index.
@@ -143,8 +100,7 @@ pub fn DynamicArray(comptime T: type) type {
         ///
         /// For safe value access, prefer `get()` and `set()` methods.
         pub fn at(self: *const Self, index: []const usize) ?*T {
-            const offset = self.strideOffset(index) orelse return null;
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return self.asView().at(index);
         }
 
         /// Get a pointer to the element at the given multi-dimensional index without bounds checking.
@@ -155,8 +111,19 @@ pub fn DynamicArray(comptime T: type) type {
         /// This function skips all bounds checking for maximum performance.
         /// Use only when you have already validated the indices.
         pub fn atUnchecked(self: *const Self, index: []const usize) *T {
-            const offset = self.strideOffsetUnchecked(index);
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return self.asView().atUnchecked(index);
+        }
+
+        /// Get the element at the given multi-dimensional index.
+        /// Returns null if the index is out of bounds.
+        pub fn get(self: *const Self, index: []const usize) ?T {
+            return self.asView().get(index);
+        }
+
+        /// Set the element at the given multi-dimensional index.
+        /// Panics if the index is out of bounds.
+        pub fn set(self: *const Self, index: []const usize, value: T) void {
+            self.asView().set(index, value);
         }
     };
 }
@@ -172,8 +139,6 @@ pub fn ConstDynamicArray(comptime T: type) type {
         shape: shape_mod.DynamicShape,
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []const T,
-        /// Pointer to "Logical Index 0" of the array (may differ from data_buffer.ptr for negative strides)
-        data_ptr: [*]const T,
 
         const Self = @This();
 
@@ -200,7 +165,6 @@ pub fn ConstDynamicArray(comptime T: type) type {
             return Self{
                 .shape = shape,
                 .data_buffer = data_buffer,
-                .data_ptr = data_buffer.ptr,
             };
         }
 
@@ -209,47 +173,13 @@ pub fn ConstDynamicArray(comptime T: type) type {
             self.shape.deinit(allocator);
         }
 
-        /// Get the element at the given multi-dimensional index.
-        /// Returns null if the index is out of bounds.
-        pub fn get(self: *const Self, index: []const usize) ?T {
-            const ptr = self.at(index) orelse return null;
-            return ptr.*;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index.
-        /// Returns:
-        ///   - The computed offset as an isize if the index is valid
-        ///   - null if the index is invalid (wrong number of dimensions or out of bounds)
-        fn strideOffset(self: *const Self, index: []const usize) ?isize {
-            // Dimension mismatch
-            if (index.len != self.shape.dims.len) return null;
-
-            var offset: isize = 0;
-
-            for (index, self.shape.dims, self.shape.strides) |idx, dim, stride| {
-                if (idx >= dim) {
-                    // Index out of bounds
-                    return null;
-                }
-                // SAFETY: This cast is safe due to the bounds check above (dim fits in isize and idx < dim)
-                const idx_isize: isize = @intCast(idx);
-                offset += idx_isize * stride;
-            }
-
-            return offset;
-        }
-
-        /// Compute the flat array offset for a given multi-dimensional index without bounds checking.
-        ///
-        /// SAFETY: The caller MUST ensure that all indices are within bounds.
-        /// Undefined behavior if any index[i] >= dims[i] or if index.len != dims.len.
-        fn strideOffsetUnchecked(self: *const Self, index: []const usize) isize {
-            var offset: isize = 0;
-            for (index, self.shape.strides) |idx, stride| {
-                const idx_isize: isize = @intCast(idx);
-                offset += idx_isize * stride;
-            }
-            return offset;
+        /// Create a const view of this array.
+        fn asView(self: *const Self) view_mod.ConstArrayView(T) {
+            return .{
+                .dims = self.shape.dims,
+                .strides = self.shape.strides,
+                .data_ptr = self.data_buffer.ptr,
+            };
         }
 
         /// Get a const pointer to the element at the given multi-dimensional index.
@@ -265,8 +195,7 @@ pub fn ConstDynamicArray(comptime T: type) type {
         ///
         /// For safe value access, prefer the `get()` method.
         pub fn at(self: *const Self, index: []const usize) ?*const T {
-            const offset = self.strideOffset(index) orelse return null;
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return self.asView().at(index);
         }
 
         /// Get a const pointer to the element at the given multi-dimensional index without bounds checking.
@@ -277,8 +206,13 @@ pub fn ConstDynamicArray(comptime T: type) type {
         /// This function skips all bounds checking for maximum performance.
         /// Use only when you have already validated the indices.
         pub fn atUnchecked(self: *const Self, index: []const usize) *const T {
-            const offset = self.strideOffsetUnchecked(index);
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return self.asView().atUnchecked(index);
+        }
+
+        /// Get the element at the given multi-dimensional index.
+        /// Returns null if the index is out of bounds.
+        pub fn get(self: *const Self, index: []const usize) ?T {
+            return self.asView().get(index);
         }
     };
 }
@@ -300,7 +234,6 @@ test "DynamicArray - public at() function" {
     const array = Array{
         .shape = shape,
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // Test that at() is now public and returns correct pointers
@@ -337,7 +270,6 @@ test "DynamicArray - atUnchecked() for performance" {
     const array = Array{
         .shape = shape,
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // atUnchecked skips bounds checking
@@ -369,7 +301,6 @@ test "ConstDynamicArray - public at() returns const pointer" {
     const array = ConstArray{
         .shape = shape,
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     // Verify at() returns const pointer
@@ -399,7 +330,6 @@ test "ConstDynamicArray - atUnchecked() returns const pointer" {
     const array = ConstArray{
         .shape = shape,
         .data_buffer = &data,
-        .data_ptr = &data,
     };
 
     const ptr = array.atUnchecked(&[_]usize{ 1, 1 });

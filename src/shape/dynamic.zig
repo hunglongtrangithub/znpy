@@ -33,6 +33,9 @@ pub const DynamicShape = struct {
             return InitError.ShapeSizeOverflow;
         };
         const strides = try computeStrides(dims, order, allocator);
+
+        std.debug.assert(strides.len == dims.len);
+
         return Self{
             .dims = dims,
             .order = order,

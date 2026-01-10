@@ -3,7 +3,10 @@ const std = @import("std");
 
 const dynamic = @import("array/dynamic.zig");
 const static = @import("array/static.zig");
+const view = @import("array/view.zig");
 
+pub const ArrayView = view.ArrayView;
+pub const ConstArrayView = view.ConstArrayView;
 pub const DynamicArray = dynamic.DynamicArray;
 pub const ConstDynamicArray = dynamic.ConstDynamicArray;
 pub const StaticArray = static.StaticArray;
@@ -40,6 +43,7 @@ pub fn ptrFromOffset(comptime T: type, base_ptr: anytype, offset: isize) switch 
 test {
     _ = dynamic;
     _ = static;
+    _ = view;
 }
 
 test "ptrFromOffset - positive stride" {
