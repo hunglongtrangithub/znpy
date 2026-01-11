@@ -14,6 +14,8 @@
 const std = @import("std");
 
 const range_mod = @import("./slice/range.zig");
+const format_mod = @import("./slice/format.zig");
+
 const array_mod = @import("./array.zig");
 
 const ArrayView = array_mod.ArrayView;
@@ -29,6 +31,10 @@ pub const Slice = union(enum) {
     /// Ellipsis (expands to multiple Range slices).
     Ellipsis,
 };
+
+pub const All = Slice{ .Range = .{} };
+pub const Etc = Slice.Ellipsis;
+pub const format_slice = format_mod.format_slice;
 
 pub const SliceError = error{
     /// The expected number of dimensions from the slices
@@ -233,6 +239,7 @@ pub fn applySlices(
 
 test {
     _ = range_mod;
+    _ = format_mod;
 }
 
 test "expandEllipsis - Single ellipsis in the middle" {
