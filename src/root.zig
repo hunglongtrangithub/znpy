@@ -11,6 +11,7 @@ pub const ElementType = elements.ElementType;
 pub const Element = elements.Element;
 pub const Order = shape.Order;
 pub const Slice = slice.Slice;
+pub const s = slice.format_slice;
 
 test {
     _ = header;

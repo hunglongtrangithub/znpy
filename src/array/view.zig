@@ -51,7 +51,7 @@ pub fn ArrayView(comptime T: type) type {
         /// The strides for each dimension (in elements, not bytes)
         /// Should always have the same length as `dims`
         strides: []const isize,
-        /// Pointer to "Logical Index 0" of the array
+        /// Pointer to "Logical Index 0" of the array view
         data_ptr: [*]T,
 
         const Self = @This();
@@ -325,8 +325,7 @@ test "ArrayView - slice with NewAxis" {
         .{ .Range = .{} },
     };
     const sliced = try view.slice(&slices, allocator);
-    defer allocator.free(sliced.dims);
-    defer allocator.free(sliced.strides);
+    defer sliced.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), sliced.dims.len);
     try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
@@ -462,8 +461,7 @@ test "ArrayView - slice mutability preserved" {
         .{ .Range = .{} },
     };
     const sliced = try view.slice(&slices, allocator);
-    defer allocator.free(sliced.dims);
-    defer allocator.free(sliced.strides);
+    defer sliced.deinit(allocator);
 
     // Mutate through sliced view
     sliced.set(&[_]usize{0}, 99.0);
@@ -482,7 +480,7 @@ pub fn ConstArrayView(comptime T: type) type {
         /// The strides for each dimension (in elements, not bytes)
         /// Should always have the same length as `dims`
         strides: []const isize,
-        /// Pointer to "Logical Index 0" of the array
+        /// Pointer to "Logical Index 0" of the array view
         data_ptr: [*]const T,
 
         const Self = @This();
@@ -555,6 +553,11 @@ pub fn ConstArrayView(comptime T: type) type {
                 .strides = new_strides,
                 .data_ptr = new_data_ptr,
             };
+        }
+
+        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.dims);
+            allocator.free(self.strides);
         }
     };
 }

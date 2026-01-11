@@ -5,6 +5,7 @@ const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 const array_mod = @import("../array.zig");
 const view_mod = @import("./view.zig");
+const slice_mod = @import("../slice.zig");
 
 /// A multi-dimensional array with static rank.
 /// The view does not own the underlying data buffer.
@@ -107,7 +108,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         /// Get a pointer to the element at the given multi-dimensional index without bounds checking.
         ///
         /// SAFETY: The caller MUST ensure that all indices are within bounds.
-        /// Undefined behavior if any index[i] >= dims[i].
+        /// Undefined behavior if any `index[i] >= dims[i]`.
         ///
         /// This function skips all bounds checking for maximum performance.
         /// Use only when you have already validated the indices.
@@ -125,6 +126,18 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         /// Panics if the index is out of bounds.
         pub fn set(self: *Self, index: [rank]usize, value: T) void {
             self.asView().set(&index, value);
+        }
+
+        /// Create a sliced array view from this array.
+        /// The returned view has the same mutability as the original.
+        ///
+        /// The caller owns the returned view's dims and strides arrays.
+        pub fn slice(
+            self: *const Self,
+            slices: []const slice_mod.Slice,
+            allocator: std.mem.Allocator,
+        ) (slice_mod.SliceError || std.mem.Allocator.Error)!view_mod.ArrayView(T) {
+            return try self.asView().slice(slices, allocator);
         }
     };
 }
@@ -199,7 +212,7 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
         /// Get a const pointer to the element at the given multi-dimensional index without bounds checking.
         ///
         /// SAFETY: The caller MUST ensure that all indices are within bounds.
-        /// Undefined behavior if any index[i] >= dims[i].
+        /// Undefined behavior if any `index[i] >= dims[i]`.
         ///
         /// This function skips all bounds checking for maximum performance.
         /// Use only when you have already validated the indices.
@@ -211,6 +224,18 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
         /// Returns null if the index is out of bounds.
         pub fn get(self: *const Self, index: [rank]usize) ?T {
             return self.asView().get(&index);
+        }
+
+        /// Create a sliced array view from this array.
+        /// The returned view has the same mutability as the original.
+        ///
+        /// The caller owns the returned view's dims and strides arrays.
+        pub fn slice(
+            self: *const Self,
+            slices: []const slice_mod.Slice,
+            allocator: std.mem.Allocator,
+        ) (slice_mod.SliceError || std.mem.Allocator.Error)!view_mod.ConstArrayView(T) {
+            return try self.asView().slice(slices, allocator);
         }
     };
 }

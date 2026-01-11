@@ -5,6 +5,7 @@ const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 const array_mod = @import("../array.zig");
 const view_mod = @import("./view.zig");
+const slice_mod = @import("../slice.zig");
 
 /// A multi-dimensional array with dynamic rank that owns its data.
 /// This array owns the data buffer and will free it on deinit.
@@ -125,6 +126,18 @@ pub fn DynamicArray(comptime T: type) type {
         pub fn set(self: *const Self, index: []const usize, value: T) void {
             self.asView().set(index, value);
         }
+
+        /// Create a sliced array view from this array.
+        /// The returned view has the same mutability as the original.
+        ///
+        /// The caller owns the returned view's dims and strides arrays.
+        pub fn slice(
+            self: *const Self,
+            slices: []const slice_mod.Slice,
+            allocator: std.mem.Allocator,
+        ) (slice_mod.SliceError || std.mem.Allocator.Error)!view_mod.ArrayView(T) {
+            return try self.asView().slice(slices, allocator);
+        }
     };
 }
 
@@ -213,6 +226,18 @@ pub fn ConstDynamicArray(comptime T: type) type {
         /// Returns null if the index is out of bounds.
         pub fn get(self: *const Self, index: []const usize) ?T {
             return self.asView().get(index);
+        }
+
+        /// Create a sliced array view from this array.
+        /// The returned view has the same mutability as the original.
+        ///
+        /// The caller owns the returned view's dims and strides arrays.
+        pub fn slice(
+            self: *const Self,
+            slices: []const slice_mod.Slice,
+            allocator: std.mem.Allocator,
+        ) (slice_mod.SliceError || std.mem.Allocator.Error)!view_mod.ArrayView(T) {
+            return try self.asView().slice(slices, allocator);
         }
     };
 }
