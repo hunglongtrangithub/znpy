@@ -58,7 +58,7 @@ const Range = struct {
 /// ```
 /// The valid input index range is `[-dim_size, dim_size)`.
 /// Returned output index range is `[0, dim_size)`.
-pub fn asboluteIndex(index: isize, dim_size: usize) usize {
+fn asboluteIndex(index: isize, dim_size: usize) usize {
     if (index >= 0) {
         const abs_index: usize = @intCast(index);
         std.debug.assert(abs_index < dim_size);
@@ -77,34 +77,8 @@ pub const Slice = union(enum) {
     Range: Range,
     /// New axis (adds a dimension of size 1).
     NewAxis,
-
-    const Self = @This();
-
-    /// Get the number of dimensions required in the input array for applying these slices.
-    pub fn inNdim(slices: []const Self) usize {
-        var in_ndim: usize = 0;
-        for (slices) |slice| {
-            switch (slice) {
-                // NewAxis slices don't consume a dimension
-                .NewAxis => {},
-                else => in_ndim += 1,
-            }
-        }
-        return in_ndim;
-    }
-
-    /// Get the number of dimensions in the output array after applying these slices.
-    pub fn outNdim(slices: []const Self) usize {
-        var out_ndim: usize = 0;
-        for (slices) |slice| {
-            switch (slice) {
-                // Index slices reduce dimensionality
-                .Index => {},
-                else => out_ndim += 1,
-            }
-        }
-        return out_ndim;
-    }
+    /// Ellipsis (expands to multiple Range slices).
+    Ellipsis,
 };
 
 pub const SliceError = error{
@@ -113,10 +87,212 @@ pub const SliceError = error{
     DimensionMismatch,
     /// The provided range values are invalid.
     InvalidRangeValues,
+    /// Multiple ellipsis slices found. Only 1 is allowed.
+    MultipleEllipsis,
 };
 
+/// Expand ellipsis slices into full Range slices based on the array rank.
+/// The caller owns the returned slice array.
+/// If no ellipsis is found, returns `null`.
+/// Returns an error if multiple ellipses are found or if the slices
+/// cannot match the array rank.
+/// Example:
+/// ```zig
+/// const slices1 = &[_]Slice{
+///     .{ .Index = 0 },
+///     .Ellipsis,
+///     .{ .Range = .{} },
+/// };
+/// const expanded1 = try expandEllipsis(slices, 4, allocator);
+/// // expanded1 == &[_]Slice{
+/// //     .{ .Index = 0 },
+/// //     .{ .Range = .{} }, // expanded
+/// //     .{ .Range = .{} }, // expanded
+/// //     .{ .Range = .{} },
+/// // }
+/// const slices2 = &[_]Slice{
+///     .{ .Range = .{} },
+///     .{ .Index = 1 },
+///     .Ellipsis,
+///     .{ .NewAxis },
+/// };
+/// const expanded2 = try expandEllipsis(slices2, 2, allocator);
+/// // expanded2 == &[_]Slice{
+/// //     .{ .Range = .{} },
+/// //     .{ .Index = 1 },
+/// //     .{ .NewAxis },
+/// // }
+/// ```
+fn expandEllipsis(
+    slices: []const Slice,
+    array_rank: usize,
+    allocator: std.mem.Allocator,
+) (SliceError || std.mem.Allocator.Error)!?[]const Slice {
+    // Find ellipsis
+    var ellipsis_idx: ?usize = null;
+    var explicit_dims: usize = 0;
+
+    for (slices, 0..) |slice, i| {
+        switch (slice) {
+            .Ellipsis => {
+                if (ellipsis_idx != null) return SliceError.MultipleEllipsis;
+                ellipsis_idx = i;
+            },
+            .Index, .Range => explicit_dims += 1,
+            .NewAxis => {},
+        }
+    }
+
+    // If no ellipsis, return null
+    if (ellipsis_idx == null) return null;
+
+    // One ellipsis exists. Calculate how many Range slices the ellipsis should expand to
+    const ellipsis_expansion = if (array_rank >= explicit_dims)
+        array_rank - explicit_dims
+    else
+        return SliceError.DimensionMismatch;
+
+    // Create new slice array with ellipsis expanded
+    const new_len = slices.len - 1 + ellipsis_expansion;
+    const expanded_slices = try allocator.alloc(Slice, new_len);
+
+    // Copy slices before ellipsis
+    @memcpy(expanded_slices[0..ellipsis_idx.?], slices[0..ellipsis_idx.?]);
+    // Fill in expanded ellipsis
+    for (0..ellipsis_expansion) |i| {
+        expanded_slices[ellipsis_idx.? + i] = .{ .Range = .{} };
+    }
+    // Copy slices after ellipsis
+    @memcpy(expanded_slices[ellipsis_idx.? + ellipsis_expansion ..], slices[ellipsis_idx.? + 1 ..]);
+
+    return expanded_slices;
+}
+
+test "expandEllipsis - Single ellipsis in the middle" {
+    const allocator = std.testing.allocator;
+    const slices = &[_]Slice{
+        .{ .Index = 0 },
+        .Ellipsis,
+        .{ .Range = .{} },
+    };
+    const expanded = (try expandEllipsis(
+        slices,
+        4,
+        allocator,
+    )).?;
+    defer allocator.free(expanded);
+    try std.testing.expectEqualSlices(
+        Slice,
+        &[_]Slice{
+            .{ .Index = 0 },
+            .{ .Range = .{} },
+            .{ .Range = .{} },
+            .{ .Range = .{} },
+        },
+        expanded,
+    );
+}
+
+test "expandEllipsis - no ellipsis" {
+    const allocator = std.testing.allocator;
+    const slices = &[_]Slice{
+        .{ .Range = .{} },
+        .{ .Index = 1 },
+        .NewAxis,
+    };
+    const expanded = try expandEllipsis(
+        slices,
+        2,
+        allocator,
+    );
+    // Should be null
+    try std.testing.expectEqual(null, expanded);
+}
+
+test "expandEllipsis - Multiple ellipses (error)" {
+    const allocator = std.testing.allocator;
+    const slices = &[_]Slice{
+        .Ellipsis,
+        .{ .Index = 0 },
+        .Ellipsis,
+    };
+    const result = expandEllipsis(
+        slices,
+        3,
+        allocator,
+    );
+    try std.testing.expectEqual(SliceError.MultipleEllipsis, result);
+}
+
+test "expandEllipsis - Ellipsis expansion that doesn't fit (error)" {
+    const allocator = std.testing.allocator;
+    const slices = &[_]Slice{
+        .{ .Index = 0 },
+        .NewAxis,
+        .Ellipsis,
+        .{ .Range = .{} },
+    };
+    const result = expandEllipsis(
+        slices,
+        1,
+        allocator,
+    );
+    try std.testing.expectEqual(SliceError.DimensionMismatch, result);
+}
+
+test "expandEllipsis - Ellipsis does not expand when exact fit" {
+    const allocator = std.testing.allocator;
+    const slices = &[_]Slice{
+        .{ .Index = 0 },
+        .Ellipsis,
+        .{ .Range = .{} },
+        .NewAxis,
+    };
+    const expanded = (try expandEllipsis(
+        slices,
+        2,
+        allocator,
+    )).?;
+    defer allocator.free(expanded);
+    try std.testing.expectEqualSlices(
+        Slice,
+        &[_]Slice{
+            .{ .Index = 0 },
+            .{ .Range = .{} },
+            .NewAxis,
+        },
+        expanded,
+    );
+}
+
+test "Ellipsis expansion at end" {
+    const allocator = std.testing.allocator;
+    const slices = &[_]Slice{
+        .{ .Index = 1 },
+        .Ellipsis,
+    };
+    const expanded = (try expandEllipsis(
+        slices,
+        3,
+        allocator,
+    )).?;
+    defer allocator.free(expanded);
+    try std.testing.expectEqualSlices(
+        Slice,
+        &[_]Slice{
+            .{ .Index = 1 },
+            .{ .Range = .{} },
+            .{ .Range = .{} },
+        },
+        expanded,
+    );
+}
+
 /// Calculate the new dims and strides arrays based on the given slices.
-///
+/// `dims` and `strides` are the original array's dimensions and strides,
+/// and must have the same length.
+/// Return the new dims and strides arrays along with the offset to the
+///  first element of the sliced view.
 /// The caller owns the returned view's dims and strides arrays.
 pub fn applySlices(
     dims: []const usize,
@@ -126,18 +302,51 @@ pub fn applySlices(
 ) (SliceError || std.mem.Allocator.Error)!struct { []usize, []isize, isize } {
     std.debug.assert(dims.len == strides.len);
 
-    const in_ndim = Slice.inNdim(slices);
-    const out_ndim = Slice.outNdim(slices);
+    // Expand ellipsis first
+    const maybe_expanded_slices = try expandEllipsis(
+        slices,
+        dims.len,
+        allocator,
+    );
+    defer if (maybe_expanded_slices) |es| allocator.free(es);
+    const expanded_slices = if (maybe_expanded_slices) |es| es else slices;
 
-    // Validate that slices match input dimensions
-    if (in_ndim != dims.len) {
+    // Calculate expected input rank
+    const in_rank = blk: {
+        var count: usize = 0;
+        for (expanded_slices) |s| {
+            switch (s) {
+                .Index, .Range => count += 1,
+                // NewAxis does not consume an input dimension
+                .NewAxis => {},
+                .Ellipsis => unreachable, // should have been expanded already
+            }
+        }
+        break :blk count;
+    };
+
+    if (in_rank != dims.len) {
         return SliceError.DimensionMismatch;
     }
 
+    // Calculate output rank
+    const out_rank = blk: {
+        var count: usize = 0;
+        for (expanded_slices) |s| {
+            switch (s) {
+                // Index collapses dimension
+                .Index => {},
+                .Range, .NewAxis => count += 1,
+                .Ellipsis => unreachable, // should have been expanded already
+            }
+        }
+        break :blk count;
+    };
+
     // Allocate new dims and strides
-    const new_dims = try allocator.alloc(usize, out_ndim);
+    const new_dims = try allocator.alloc(usize, out_rank);
     errdefer allocator.free(new_dims);
-    const new_strides = try allocator.alloc(isize, out_ndim);
+    const new_strides = try allocator.alloc(isize, out_rank);
     errdefer allocator.free(new_strides);
 
     // Calculate the offset to the first element and populate new dims/strides
@@ -145,7 +354,7 @@ pub fn applySlices(
     var in_axis: usize = 0;
     var out_axis: usize = 0;
 
-    for (slices) |s| {
+    for (expanded_slices) |s| {
         switch (s) {
             .Index => |idx| {
                 // Index: collapse this dimension
@@ -179,11 +388,12 @@ pub fn applySlices(
                 new_strides[out_axis] = 0;
                 out_axis += 1;
             },
+            .Ellipsis => unreachable, // should have been expanded already
         }
     }
 
-    std.debug.assert(in_axis == in_ndim);
-    std.debug.assert(out_axis == out_ndim);
+    std.debug.assert(in_axis == in_rank);
+    std.debug.assert(out_axis == out_rank);
 
     return .{ new_dims, new_strides, offset };
 }
@@ -200,13 +410,14 @@ test "comprehensive slicing tests" {
     };
 
     // Test 1: Single Index - get first 2x3 slice
-    // [Index=0, Range, Range] -> [[1,2,3], [4,5,6]] with shape [2, 3]
+    // [Index=0, Ellipsis]
+    // -> [Index=0, Range, Range]
+    // -> [[1,2,3], [4,5,6]] with shape [2, 3]
     {
         const sliced = try view.slice(
             &[_]Slice{
                 .{ .Index = 0 },
-                .{ .Range = .{} },
-                .{ .Range = .{} },
+                .Ellipsis,
             },
             allocator,
         );
@@ -220,13 +431,14 @@ test "comprehensive slicing tests" {
     }
 
     // Test 2: Single Index - get second 2x3 slice
-    // [Index=1, Range, Range] -> [[7,8,9], [10,11,12]] with shape [2, 3]
+    // [Index=1, Sllipsis]
+    // -> [Index=1, Range, Range]
+    // -> [[7,8,9], [10,11,12]] with shape [2, 3]
     {
         const sliced = try view.slice(
             &[_]Slice{
                 .{ .Index = 1 },
-                .{ .Range = .{} },
-                .{ .Range = .{} },
+                .Ellipsis,
             },
             allocator,
         );
@@ -237,13 +449,15 @@ test "comprehensive slicing tests" {
     }
 
     // Test 3: Double Index - get specific row
-    // [Index=0, Index=1, Range] -> [4,5,6] with shape [3]
+    // [Index=0, Index=1, Ellipsis]
+    // -> [Index=0, Index=1, Range]
+    // -> [4,5,6] with shape [3]
     {
         const sliced = try view.slice(
             &[_]Slice{
                 .{ .Index = 0 },
                 .{ .Index = 1 },
-                .{ .Range = .{} },
+                .Ellipsis,
             },
             allocator,
         );
@@ -256,12 +470,13 @@ test "comprehensive slicing tests" {
     }
 
     // Test 4: Range with bounds - get middle column
-    // [Range, Range, Index=1] -> [[2,5], [8,11]] with shape [2, 2]
+    // [Ellipsis, Index=1]
+    // -> [Range, Range, Index=1]
+    // -> [[2,5], [8,11]] with shape [2, 2]
     {
         const sliced = try view.slice(
             &[_]Slice{
-                .{ .Range = .{} },
-                .{ .Range = .{} },
+                .Ellipsis,
                 .{ .Index = 1 },
             },
             allocator,
@@ -277,14 +492,15 @@ test "comprehensive slicing tests" {
     }
 
     // Test 5: NewAxis at front
-    // [NewAxis, Index=0, Range, Range] -> [[[1,2,3], [4,5,6]]] with shape [1, 2, 3]
+    // [NewAxis, Index=0, Ellipsis]
+    // -> [NewAxis, Index=0, Range, Range]
+    // -> [[[1,2,3], [4,5,6]]] with shape [1, 2, 3]
     {
         const sliced = try view.slice(
             &[_]Slice{
                 .NewAxis,
                 .{ .Index = 0 },
-                .{ .Range = .{} },
-                .{ .Range = .{} },
+                .Ellipsis,
             },
             allocator,
         );
@@ -298,14 +514,15 @@ test "comprehensive slicing tests" {
     }
 
     // Test 6: NewAxis in middle
-    // [Index=0, NewAxis, Range, Range] -> [[[1,2,3], [4,5,6]]] with shape [1, 2, 3]
+    // [Index=0, NewAxis, Range, Range]
+    // -> [Index=0, NewAxis, Range, Range]
+    // -> [[[1,2,3], [4,5,6]]] with shape [1, 2, 3]
     {
         const sliced = try view.slice(
             &[_]Slice{
                 .{ .Index = 0 },
                 .NewAxis,
-                .{ .Range = .{} },
-                .{ .Range = .{} },
+                .Ellipsis,
             },
             allocator,
         );
@@ -319,14 +536,16 @@ test "comprehensive slicing tests" {
     }
 
     // Test 7: NewAxis after two ranges
-    // [Index=0, Range, NewAxis, Range] -> [[[1,2,3]], [[4,5,6]]] with shape [2, 1, 3]
+    // [Index=0, Range, NewAxis, Ellipsis]
+    // -> [Index=0, Range, NewAxis, Range]
+    // -> [[[1,2,3]], [[4,5,6]]] with shape [2, 1, 3]
     {
         const sliced = try view.slice(
             &[_]Slice{
                 .{ .Index = 0 },
                 .{ .Range = .{} },
                 .NewAxis,
-                .{ .Range = .{} },
+                .Ellipsis,
             },
             allocator,
         );
@@ -342,13 +561,14 @@ test "comprehensive slicing tests" {
     }
 
     // Test 8: NewAxis at end
-    // [Index=0, Range, Range, NewAxis] -> [[[1],[2],[3]], [[4],[5],[6]]] with shape [2, 3, 1]
+    // [Index=0, Ellipsis, NewAxis]
+    // -> [Index=0, Range, Range, NewAxis]
+    // -> [[[1],[2],[3]], [[4],[5],[6]]] with shape [2, 3, 1]
     {
         const sliced = try view.slice(
             &[_]Slice{
                 .{ .Index = 0 },
-                .{ .Range = .{} },
-                .{ .Range = .{} },
+                .Ellipsis,
                 .NewAxis,
             },
             allocator,
@@ -367,7 +587,8 @@ test "comprehensive slicing tests" {
     }
 
     // Test 9: Multiple NewAxis
-    // [NewAxis, Index=0, Index=0, Range, NewAxis] -> [[[1,2,3]]] with shape [1, 3, 1]
+    // [NewAxis, Index=0, Index=0, Range, NewAxis]
+    // -> [[[1,2,3]]] with shape [1, 3, 1]
     {
         const sliced = try view.slice(
             &[_]Slice{
@@ -390,7 +611,8 @@ test "comprehensive slicing tests" {
     }
 
     // Test 10: Get a specific element (all indices)
-    // [Index=1, Index=1, Index=2] -> scalar 12 with shape []
+    // [Index=1, Index=1, Index=2]
+    // -> scalar 12 with shape []
     {
         const sliced = try view.slice(
             &[_]Slice{
@@ -406,13 +628,13 @@ test "comprehensive slicing tests" {
     }
 
     // Test 11: Negative indices
-    // [Index=-1, Range, Range] -> [[7,8,9], [10,11,12]] (last slice)
+    // [Index=-1, Ellipsis]
+    // -> [[7,8,9], [10,11,12]] (last slice)
     {
         const sliced = try view.slice(
             &[_]Slice{
                 .{ .Index = -1 },
-                .{ .Range = .{} },
-                .{ .Range = .{} },
+                .Ellipsis,
             },
             allocator,
         );
@@ -423,13 +645,13 @@ test "comprehensive slicing tests" {
     }
 
     // Test 12: Range with explicit bounds
-    // [Range{start=0, end=1}, Range, Range] -> [[[1,2,3], [4,5,6]]] (first slice only)
+    // [Range{start=0, end=1}, Ellipsis]
+    // -> [[[1,2,3], [4,5,6]]] (first slice only)
     {
         const sliced = try view.slice(
             &[_]Slice{
                 .{ .Range = .{ .start = 0, .end = 1 } },
-                .{ .Range = .{} },
-                .{ .Range = .{} },
+                .Ellipsis,
             },
             allocator,
         );
@@ -443,13 +665,14 @@ test "comprehensive slicing tests" {
     }
 
     // Test 13: Range with step
-    // [Range, Range, Range{start=0, end=3, step=2}] -> every other element in last dim
-    // [[[1,3], [4,6]], [[7,9], [10,12]]]
+    // [Ellipsis, Range{start=0, end=3, step=2}]
+    // -> [Range, Range, Range{start=0, end=3, step=2}]
+    // -> every other element in last dim
+    // -> [[[1,3], [4,6]], [[7,9], [10,12]]]
     {
         const sliced = try view.slice(
             &[_]Slice{
-                .{ .Range = .{} },
-                .{ .Range = .{} },
+                .Ellipsis,
                 .{ .Range = .{ .start = 0, .end = 3, .step = 2 } },
             },
             allocator,
@@ -466,7 +689,8 @@ test "comprehensive slicing tests" {
     }
 
     // Test 14: Combination - get diagonal-like pattern
-    // [Index=0, Index=1, NewAxis, Range] -> [[4,5,6]] with shape [1, 3]
+    // [Index=0, Index=1, NewAxis, Range]
+    // -> [[4,5,6]] with shape [1, 3]
     {
         const sliced = try view.slice(
             &[_]Slice{
