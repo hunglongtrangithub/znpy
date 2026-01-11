@@ -10,6 +10,7 @@ pub const slice = @import("slice.zig");
 pub const ElementType = elements.ElementType;
 pub const Element = elements.Element;
 pub const Order = shape.Order;
+pub const Slice = slice.Slice;
 
 test {
     _ = header;

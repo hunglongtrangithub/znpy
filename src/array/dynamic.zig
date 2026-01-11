@@ -79,7 +79,7 @@ pub fn DynamicArray(comptime T: type) type {
         }
 
         /// Create a view of this array.
-        fn asView(self: *const Self) view_mod.ArrayView(T) {
+        pub fn asView(self: *const Self) view_mod.ArrayView(T) {
             return .{
                 .dims = self.shape.dims,
                 .strides = self.shape.strides,

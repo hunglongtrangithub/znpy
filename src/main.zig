@@ -37,21 +37,23 @@ fn readNpyArrayMmap(npy_file_path: []const u8, allocator: std.mem.Allocator) !vo
     // Use a const array since the mmap buffer cannot be mutated
     const ConstArray3D = znpy.array.ConstStaticArray(i16, 3);
 
-    var array_view: ConstArray3D = ConstArray3D.fromFileBuffer(file_buffer, allocator) catch |e| {
+    var array: ConstArray3D = ConstArray3D.fromFileBuffer(file_buffer, allocator) catch |e| {
         std.debug.print("Failed to create ArrayView from file buffer: {}\n", .{e});
         return;
     };
 
-    std.debug.assert(array_view.shape.dims.len == 3);
+    std.debug.print("Array shape: {any}\n", .{array.shape.dims});
+    std.debug.assert(array.shape.dims.len == 3);
 
-    for (0..array_view.shape.dims[0]) |i| {
-        for (0..array_view.shape.dims[1]) |j| {
-            for (0..array_view.shape.dims[2]) |k| {
-                const value = array_view.get([3]usize{ i, j, k }).?;
-                std.debug.print("Element at ({}, {}, {}) = {}\n", .{ i, j, k, value });
-            }
-        }
-    }
+    const array_view = try array.asView().slice(
+        &[_]znpy.Slice{
+            .{ .Index = 0 },
+            .Ellipsis,
+        },
+        allocator,
+    );
+    std.debug.print("Sliced Array shape: {any}\n", .{array_view.dims});
+    return;
 }
 
 pub fn main() !void {

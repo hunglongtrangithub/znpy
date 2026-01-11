@@ -49,25 +49,28 @@ pub fn StaticShape(comptime rank: usize) type {
         /// Create a `StaticShape` from a numpy header.
         /// Returns an error if the shape's total size in bytes overflows isize,
         /// or if the number of dimensions does not match the expected rank.
-        pub fn fromHeader(npy_header: header_mod.Header) FromHeaderError!Self {
-            // Extract shape, checking rank if static
+        pub fn fromHeader(header: header_mod.Header) FromHeaderError!Self {
+            // Extract shape and check rank
             const dims = blk: {
-                if (npy_header.shape.len != rank) {
+                if (header.shape.len != rank) {
                     return error.DimensionMismatch;
                 }
                 var static_dims: [rank]usize = undefined;
-                @memcpy(&static_dims, npy_header.shape[0..rank]);
+                @memcpy(&static_dims, header.shape[0..rank]);
                 break :blk static_dims;
             };
 
             // Check that the shape length fits in isize
-            const num_elements = shape_mod.shapeSizeChecked(npy_header.descr, dims[0..]) orelse {
+            const num_elements = shape_mod.shapeSizeChecked(header.descr, dims[0..]) orelse {
                 return error.ShapeSizeOverflow;
             };
-            const strides = computeStrides(dims, npy_header.order);
+            const strides = computeStrides(dims, header.order);
+
+            std.debug.assert(strides.len == rank);
+
             return Self{
                 .dims = dims,
-                .order = npy_header.order,
+                .order = header.order,
                 .strides = strides,
                 .num_elements = num_elements,
             };

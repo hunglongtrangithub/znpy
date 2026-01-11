@@ -1,3 +1,16 @@
+//! Slicing utilities for multi-dimensional arrays.
+//! Supports indexing, ranges with steps, new axes, and ellipses.
+//! Example usage:
+//! ```zig
+//! const slice = Slice.Range{ .start = 0, .end = 10, .step = 2 };
+//! const slices = &[_]Slice{
+//!     .{ .Index = 0 },
+//!     .Ellipsis,
+//!     .{ .Range = .{ .start = 1, .end = 5 } },
+//!     .NewAxis,
+//! };
+//! const sliced_view = try array_view.slice(slices, allocator);
+//! ```
 const std = @import("std");
 
 const array = @import("./array.zig");

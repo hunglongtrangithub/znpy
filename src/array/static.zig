@@ -80,7 +80,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         }
 
         /// Create a view of this array.
-        fn asView(self: *const Self) view_mod.ArrayView(T) {
+        pub fn asView(self: *const Self) view_mod.ArrayView(T) {
             return .{
                 .dims = &self.shape.dims,
                 .strides = &self.shape.strides,
@@ -172,7 +172,7 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
         }
 
         /// Create a const view of this array for indexing operations.
-        fn asView(self: *const Self) view_mod.ConstArrayView(T) {
+        pub fn asView(self: *const Self) view_mod.ConstArrayView(T) {
             return .{
                 .dims = &self.shape.dims,
                 .strides = &self.shape.strides,
