@@ -8,6 +8,36 @@ const All = slice_mod.All;
 const Etc = slice_mod.Etc;
 const Range = range_mod.Range;
 
+/// Format a tuple or struct of slice specifications into an array of Slice.
+/// Each field can be:
+/// - A `Slice` instance
+/// - An integer (for index slice)
+/// - A struct with up to three fields (for range slice):
+///   - 1 field: start
+///   - 2 fields: start, end
+///   - 3 fields: start, end, step
+///   Fields can be integers or optional integers (for nullable end).
+///   - Enum literals like `.All`, `.Etc`, etc. defined in `Slice` union
+/// Example usage:
+/// ```zig
+/// const slice = @import("znpy").slice;
+/// const format_slice = slice.format_slice;
+/// const Slice = slice.Slice;
+/// const All = slice.All;
+/// const Etc = slice.Etc;
+/// const slices = format_slice(.{
+///     .{}, // Default slice
+///     .{1}, // Slice with only start
+///     .{ 1, 10 }, // Slice with start and end
+///     .{ 1, 10, 2 }, // Slice with start, end and step
+///     .{null, null, 2}, // Slice with default start/end and step of 2
+///     .{1, null, 2}, // Slice with start, null end, and step
+///     5, // Index slice
+///     All,
+///     Etc,
+///    Slice{ .Range = slice.Range{ .start = 2, .end = 8 } }, // Already a Slice
+/// });
+/// ```
 pub fn format_slice(args: anytype) [args.len]Slice {
     const ArgsType = @TypeOf(args);
     const args_type_info = @typeInfo(ArgsType);
