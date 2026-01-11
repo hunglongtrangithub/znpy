@@ -2,10 +2,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const header = @import("header.zig");
 const boolean = @import("elements/boolean.zig");
+const types = @import("elements/types.zig");
 
 const native_endian = builtin.cpu.arch.endian();
+
+pub const ElementType = types.ElementType;
 
 pub const ViewDataError = error{
     /// The provided element type does not match the expected type.
@@ -30,7 +32,7 @@ const ReadDataError = error{};
 
 /// A generic element type representing a single element of type `T` in a numpy array.
 pub fn Element(comptime T: type) type {
-    const element_type = header.ElementType.fromZigType(T) catch @compileError("Unsupported type");
+    const element_type = ElementType.fromZigType(T) catch @compileError("Unsupported type");
 
     return struct {
         const Self = @This();
@@ -40,7 +42,7 @@ pub fn Element(comptime T: type) type {
         pub fn bytesAsSlice(
             bytes: []const u8,
             len: usize,
-            type_descr: header.ElementType,
+            type_descr: ElementType,
         ) ViewDataError![]const T {
             // Element types must match
             if (std.meta.activeTag(type_descr) != std.meta.activeTag(element_type)) {
@@ -107,7 +109,7 @@ pub fn Element(comptime T: type) type {
             _ = writer;
         }
 
-        pub fn readSlice(slice: []T, reader: *std.io.Reader, type_descr: header.ElementType) ReadDataError!void {
+        pub fn readSlice(slice: []T, reader: *std.io.Reader, type_descr: ElementType) ReadDataError!void {
             _ = slice;
             _ = reader;
             _ = type_descr;
@@ -116,6 +118,7 @@ pub fn Element(comptime T: type) type {
 }
 
 test {
+    _ = types;
     _ = boolean;
 }
 

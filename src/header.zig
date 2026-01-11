@@ -35,20 +35,14 @@
 const std = @import("std");
 
 const parse = @import("header/parse.zig");
-const descr = @import("header/descr.zig");
 const lex = @import("header/lex.zig");
+const elements = @import("elements.zig");
+const shape = @import("shape.zig");
 
 const log = std.log.scoped(.npy_header);
 
-pub const ElementType = descr.ElementType;
-
-/// Specifies how array data is laid out in memory
-pub const Order = enum {
-    /// Array data is in row-major order (C-contiguous)
-    C,
-    /// Array data is in column-major order (Fortran-contiguous)
-    F,
-};
+const ElementType = elements.ElementType;
+const Order = shape.Order;
 
 pub const HeaderEncoding = enum {
     /// Header data is in ASCII
@@ -141,7 +135,7 @@ pub const Header = struct {
     /// The element type descriptor, extracted from the 'descr' key.
     descr: ElementType,
     /// The array order, extracted from the 'fortran_order' key.
-    order: Order,
+    order: shape.Order,
 
     const Self = @This();
 
@@ -390,7 +384,6 @@ pub const Header = struct {
 
 test {
     _ = parse;
-    _ = descr;
     _ = lex;
 }
 

@@ -2,6 +2,7 @@ const std = @import("std");
 
 const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
+const elements_mod = @import("../elements.zig");
 
 pub const DynamicShape = struct {
     /// The size of each dimension. Slice is owned by the caller.
@@ -13,7 +14,7 @@ pub const DynamicShape = struct {
     /// The total number of elements in the array
     num_elements: usize,
     /// The memory order of the array.
-    order: header_mod.Order,
+    order: shape_mod.Order,
 
     const Self = @This();
 
@@ -24,8 +25,8 @@ pub const DynamicShape = struct {
     /// Initialize a `DynamicShape` instance, with shape size overflow check and strides computation.
     pub fn init(
         dims: []const usize,
-        order: header_mod.Order,
-        descr: header_mod.ElementType,
+        order: shape_mod.Order,
+        descr: elements_mod.ElementType,
         allocator: std.mem.Allocator,
     ) InitError!Self {
         // Check that the shape length fits in isize
@@ -78,7 +79,7 @@ pub const DynamicShape = struct {
     /// 2. Fit in isize without overflow
     fn computeStrides(
         dims: []const usize,
-        order: header_mod.Order,
+        order: shape_mod.Order,
         allocator: std.mem.Allocator,
     ) std.mem.Allocator.Error![]isize {
         // Scalar case: no dimensions, no strides - return empty slice owned by allocator
@@ -139,7 +140,7 @@ test "DynamicShape.fromHeader - valid shape" {
     try std.testing.expectEqual(@as(usize, 2), shape.dims[0]);
     try std.testing.expectEqual(@as(usize, 3), shape.dims[1]);
     try std.testing.expectEqual(@as(usize, 4), shape.dims[2]);
-    try std.testing.expectEqual(header_mod.Order.C, shape.order);
+    try std.testing.expectEqual(shape_mod.Order.C, shape.order);
 }
 
 test "DynamicShape.fromHeader - overflow error" {

@@ -1,15 +1,24 @@
 const std = @import("std");
 
 const header = @import("header.zig");
+const elements = @import("elements.zig");
 const dynamic = @import("shape/dynamic.zig");
 const static = @import("shape/static.zig");
 
 pub const DynamicShape = dynamic.DynamicShape;
 pub const StaticShape = static.StaticShape;
 
+/// Specifies how array data is laid out in memory
+pub const Order = enum {
+    /// Array data is in row-major order (C-contiguous)
+    C,
+    /// Array data is in column-major order (Fortran-contiguous)
+    F,
+};
+
 /// Returns the number of elements in the array on success, or `null` if overflow occurs.
 /// The number of bytes an array takes, given its shape and element type, must not exceed `std.math.maxInt(isize)`
-pub fn shapeSizeChecked(T: header.ElementType, shape: []const usize) ?usize {
+pub fn shapeSizeChecked(T: elements.ElementType, shape: []const usize) ?usize {
     // NOTE: An empty shape (zero dimensions) is valid and has size 1 (a scalar).
     const num_elements = blk: {
         var prod: usize = 1;

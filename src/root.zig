@@ -5,13 +5,16 @@ pub const header = @import("header.zig");
 pub const elements = @import("elements.zig");
 pub const shape = @import("shape.zig");
 pub const array = @import("array.zig");
+pub const slice = @import("slice.zig");
 
-pub const ElementType = header.ElementType;
+pub const ElementType = elements.ElementType;
 pub const Element = elements.Element;
+pub const Order = shape.Order;
 
 test {
     _ = header;
     _ = elements;
     _ = shape;
     _ = array;
+    _ = slice;
 }

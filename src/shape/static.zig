@@ -2,6 +2,7 @@ const std = @import("std");
 
 const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
+const elements_mod = @import("../elements.zig");
 
 pub fn StaticShape(comptime rank: usize) type {
     // TODO: consider adding a check to reject ranks that are too large?
@@ -15,7 +16,7 @@ pub fn StaticShape(comptime rank: usize) type {
         /// The total number of elements in the array
         num_elements: usize,
         /// The memory order of the array.
-        order: header_mod.Order,
+        order: shape_mod.Order,
 
         const Self = @This();
 
@@ -29,8 +30,8 @@ pub fn StaticShape(comptime rank: usize) type {
         /// Initialize a `StaticShape` instance, with shape size overflow check and strides computation.
         pub fn init(
             dims: [rank]usize,
-            order: header_mod.Order,
-            descr: header_mod.ElementType,
+            order: shape_mod.Order,
+            descr: elements_mod.ElementType,
         ) InitError!Self {
             // Check that the shape length fits in isize
             const num_elements = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
@@ -79,7 +80,7 @@ pub fn StaticShape(comptime rank: usize) type {
         /// the offset calculation `Σ(indices[i] * strides[i])` is guaranteed to:
         /// 1. Be less than the total number of elements in the shape
         /// 2. Fit in isize without overflow
-        fn computeStrides(dims: [rank]usize, order: header_mod.Order) [rank]isize {
+        fn computeStrides(dims: [rank]usize, order: shape_mod.Order) [rank]isize {
             var strides = [_]isize{0} ** rank;
 
             // Scalar case: no dimensions, no strides
@@ -245,7 +246,7 @@ test "StaticShape.fromHeader - valid 2D" {
     try std.testing.expectEqual(@as(usize, 12), shape.num_elements);
     try std.testing.expectEqual(@as(usize, 3), shape.dims[0]);
     try std.testing.expectEqual(@as(usize, 4), shape.dims[1]);
-    try std.testing.expectEqual(header_mod.Order.C, shape.order);
+    try std.testing.expectEqual(shape_mod.Order.C, shape.order);
 }
 
 test "StaticShape.fromHeader - dimension mismatch" {

@@ -12,7 +12,7 @@ const view_mod = @import("./view.zig");
 ///
 /// `T` is the element type.
 pub fn DynamicArray(comptime T: type) type {
-    const element_type = header_mod.ElementType.fromZigType(T) catch @compileError("Unsupported element type for DynamicArray");
+    const element_type = elements_mod.ElementType.fromZigType(T) catch @compileError("Unsupported element type for DynamicArray");
     return struct {
         /// The shape of the array (dimensions, strides, order, num_elements)
         shape: shape_mod.DynamicShape,
@@ -21,7 +21,7 @@ pub fn DynamicArray(comptime T: type) type {
 
         const Self = @This();
 
-        pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.DynamicShape.FromHeaderError || elements_mod.ViewDataError;
+        pub const FromFileBufferError = elements_mod.ReadHeaderError || shape_mod.DynamicShape.FromHeaderError || elements_mod.ViewDataError;
 
         pub const InitError = shape_mod.DynamicShape.InitError || std.mem.AllocError;
 
@@ -29,7 +29,7 @@ pub fn DynamicArray(comptime T: type) type {
         /// A new data buffer will be allocated using the provided allocator.
         pub fn init(
             dims: []const usize,
-            order: header_mod.Order,
+            order: shape_mod.Order,
             allocator: std.mem.Allocator,
         ) InitError!Self {
             const shape = try shape_mod.DynamicShape.init(
@@ -226,7 +226,7 @@ test "DynamicArray - public at() function" {
     const shape = try shape_mod.DynamicShape.init(
         &dims,
         .C,
-        header_mod.ElementType{ .Float64 = null },
+        elements_mod.ElementType{ .Float64 = null },
         allocator,
     );
     defer shape.deinit(allocator);
@@ -262,7 +262,7 @@ test "DynamicArray - atUnchecked() for performance" {
     const shape = try shape_mod.DynamicShape.init(
         &dims,
         .C,
-        header_mod.ElementType{ .Int32 = null },
+        elements_mod.ElementType{ .Int32 = null },
         allocator,
     );
     defer shape.deinit(allocator);
@@ -293,7 +293,7 @@ test "ConstDynamicArray - public at() returns const pointer" {
     const shape = try shape_mod.DynamicShape.init(
         &dims,
         .C,
-        header_mod.ElementType{ .UInt32 = null },
+        elements_mod.ElementType{ .UInt32 = null },
         allocator,
     );
     defer shape.deinit(allocator);
@@ -322,7 +322,7 @@ test "ConstDynamicArray - atUnchecked() returns const pointer" {
     const shape = try shape_mod.DynamicShape.init(
         &dims,
         .C,
-        header_mod.ElementType.Int8,
+        elements_mod.ElementType.Int8,
         allocator,
     );
     defer shape.deinit(allocator);

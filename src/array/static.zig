@@ -14,7 +14,7 @@ const view_mod = @import("./view.zig");
 /// `rank` is the number of dimensions.
 pub fn StaticArray(comptime T: type, comptime rank: usize) type {
     // TODO: consider adding a check to reject ranks that are too large, or limit rank to u8?
-    const element_type = header_mod.ElementType.fromZigType(T) catch @compileError("Unsupported type for StaticArray");
+    const element_type = elements_mod.ElementType.fromZigType(T) catch @compileError("Unsupported type for StaticArray");
 
     return struct {
         /// The shape of the array (dimensions, strides, order, num_elements)
@@ -32,7 +32,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         /// A new data buffer will be allocated using the provided allocator.
         pub fn init(
             dims: [rank]usize,
-            order: header_mod.Order,
+            order: shape_mod.Order,
             allocator: std.mem.Allocator,
         ) InitError!Self {
             const shape = try shape_mod.StaticShape(rank).init(
