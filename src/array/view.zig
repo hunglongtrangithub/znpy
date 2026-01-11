@@ -132,6 +132,11 @@ pub fn ArrayView(comptime T: type) type {
                 .data_ptr = new_data_ptr,
             };
         }
+
+        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
+            allocator.free(self.dims);
+            allocator.free(self.strides);
+        }
     };
 }
 
@@ -181,19 +186,18 @@ test "ArrayView - slice with Index" {
     };
 
     // Slice first row: view[0, :]
-    const slices1 = [_]slice_mod.Slice{
+    const slices = [_]slice_mod.Slice{
         .{ .Index = 0 },
         .{ .Range = .{} },
     };
-    const sliced1 = try view.slice(&slices1, allocator);
-    defer allocator.free(sliced1.dims);
-    defer allocator.free(sliced1.strides);
+    const sliced = try view.slice(&slices, allocator);
+    defer sliced.deinit(allocator);
 
-    try std.testing.expectEqual(@as(usize, 1), sliced1.dims.len);
-    try std.testing.expectEqual(@as(usize, 3), sliced1.dims[0]);
-    try std.testing.expectEqual(@as(?f32, 1.0), sliced1.get(&[_]usize{0}));
-    try std.testing.expectEqual(@as(?f32, 2.0), sliced1.get(&[_]usize{1}));
-    try std.testing.expectEqual(@as(?f32, 3.0), sliced1.get(&[_]usize{2}));
+    try std.testing.expectEqual(@as(usize, 1), sliced.dims.len);
+    try std.testing.expectEqual(@as(usize, 3), sliced.dims[0]);
+    try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&[_]usize{0}));
+    try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&[_]usize{1}));
+    try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&[_]usize{2}));
 }
 
 test "ArrayView - slice with Range and step" {
@@ -213,8 +217,7 @@ test "ArrayView - slice with Range and step" {
         .{ .Range = .{ .start = 1, .end = 5, .step = 2 } },
     };
     const sliced = try view.slice(&slices, allocator);
-    defer allocator.free(sliced.dims);
-    defer allocator.free(sliced.strides);
+    defer sliced.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 1), sliced.dims.len);
     try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
@@ -236,58 +239,54 @@ test "ArrayView - slice with negative step" {
         .data_ptr = &data,
     };
 
-    // Test 1: arr.slice(s![1..3;-1]) should give [2, 1]
+    // Test 1: should give [2, 1]
     // With negative step, we go from end-1 backwards to start
     {
         const slices = [_]slice_mod.Slice{
             .{ .Range = .{ .start = 1, .end = 3, .step = -1 } },
         };
         const sliced = try view.slice(&slices, allocator);
-        defer allocator.free(sliced.dims);
-        defer allocator.free(sliced.strides);
+        defer sliced.deinit(allocator);
 
         try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&.{0}));
         try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
     }
 
-    // Test 2: arr.slice(s![1..;-2]) should give [3, 1]
+    // Test 2: should give [3, 1]
     // Range from 1 to end (4), step -2, starts at index 3
     {
         const slices = [_]slice_mod.Slice{
             .{ .Range = .{ .start = 1, .end = null, .step = -2 } },
         };
         const sliced = try view.slice(&slices, allocator);
-        defer allocator.free(sliced.dims);
-        defer allocator.free(sliced.strides);
+        defer sliced.deinit(allocator);
 
         try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
         try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
     }
 
-    // Test 3: arr.slice(s![0..4;-2]) should give [3, 1]
+    // Test 3: should give [3, 1]
     {
         const slices = [_]slice_mod.Slice{
             .{ .Range = .{ .start = 0, .end = 4, .step = -2 } },
         };
         const sliced = try view.slice(&slices, allocator);
-        defer allocator.free(sliced.dims);
-        defer allocator.free(sliced.strides);
+        defer sliced.deinit(allocator);
 
         try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
         try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
     }
 
-    // Test 4: arr.slice(s![0..;-2]) should give [3, 1]
+    // Test 4: should give [3, 1]
     {
         const slices = [_]slice_mod.Slice{
             .{ .Range = .{ .start = 0, .end = null, .step = -2 } },
         };
         const sliced = try view.slice(&slices, allocator);
-        defer allocator.free(sliced.dims);
-        defer allocator.free(sliced.strides);
+        defer sliced.deinit(allocator);
 
         try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
@@ -300,8 +299,7 @@ test "ArrayView - slice with negative step" {
             .{ .Range = .{ .start = 0, .end = null, .step = -2 } },
         };
         const sliced = try view.slice(&slices, allocator);
-        defer allocator.free(sliced.dims);
-        defer allocator.free(sliced.strides);
+        defer sliced.deinit(allocator);
 
         try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
@@ -336,6 +334,114 @@ test "ArrayView - slice with NewAxis" {
     try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&[_]usize{ 0, 0 }));
     try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&[_]usize{ 0, 1 }));
     try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&[_]usize{ 0, 2 }));
+}
+
+test "ArrayView - slice with NewAxis, Range, and Index" {
+    const allocator = std.testing.allocator;
+    var data = [_]u32{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    const dims = [_]usize{ 2, 2, 3 };
+    const strides = [_]isize{ 6, 3, 1 }; // C-order: [[[1,2,3], [4,5,6]], [[7,8,9], [10,11,12]]]
+    const view = ArrayView(u32){
+        .dims = &dims,
+        .strides = &strides,
+        .data_ptr = &data,
+    };
+
+    // Test 1: NewAxis at position 0 (front)
+    // [NewAxis, Index=0, Range, Range]
+    // Result: [[[1,2,3], [4,5,6]]] with shape [1, 2, 3]
+    const sliced1 = try view.slice(
+        &[_]slice_mod.Slice{
+            .NewAxis,
+            .{ .Index = 0 },
+            .{ .Range = .{} },
+            .{ .Range = .{} },
+        },
+        allocator,
+    );
+    defer sliced1.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 3), sliced1.dims.len);
+    try std.testing.expectEqual(@as(usize, 1), sliced1.dims[0]);
+    try std.testing.expectEqual(@as(usize, 2), sliced1.dims[1]);
+    try std.testing.expectEqual(@as(usize, 3), sliced1.dims[2]);
+    try std.testing.expectEqual(@as(?u32, 1), sliced1.get(&[_]usize{ 0, 0, 0 }));
+    try std.testing.expectEqual(@as(?u32, 2), sliced1.get(&[_]usize{ 0, 0, 1 }));
+    try std.testing.expectEqual(@as(?u32, 3), sliced1.get(&[_]usize{ 0, 0, 2 }));
+    try std.testing.expectEqual(@as(?u32, 4), sliced1.get(&[_]usize{ 0, 1, 0 }));
+    try std.testing.expectEqual(@as(?u32, 5), sliced1.get(&[_]usize{ 0, 1, 1 }));
+    try std.testing.expectEqual(@as(?u32, 6), sliced1.get(&[_]usize{ 0, 1, 2 }));
+
+    // Test 2: NewAxis at position 1 (middle)
+    // [Index=0, NewAxis, Range, Range]
+    // Result: [[[1,2,3], [4,5,6]]] with shape [1, 2, 3]
+    const sliced2 = try view.slice(
+        &[_]slice_mod.Slice{
+            .{ .Index = 0 },
+            .NewAxis,
+            .{ .Range = .{} },
+            .{ .Range = .{} },
+        },
+        allocator,
+    );
+    defer sliced2.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 3), sliced2.dims.len);
+    try std.testing.expectEqual(@as(usize, 1), sliced2.dims[0]);
+    try std.testing.expectEqual(@as(usize, 2), sliced2.dims[1]);
+    try std.testing.expectEqual(@as(usize, 3), sliced2.dims[2]);
+    try std.testing.expectEqual(@as(?u32, 1), sliced2.get(&[_]usize{ 0, 0, 0 }));
+    try std.testing.expectEqual(@as(?u32, 2), sliced2.get(&[_]usize{ 0, 0, 1 }));
+    try std.testing.expectEqual(@as(?u32, 3), sliced2.get(&[_]usize{ 0, 0, 2 }));
+    try std.testing.expectEqual(@as(?u32, 4), sliced2.get(&[_]usize{ 0, 1, 0 }));
+    try std.testing.expectEqual(@as(?u32, 5), sliced2.get(&[_]usize{ 0, 1, 1 }));
+    try std.testing.expectEqual(@as(?u32, 6), sliced2.get(&[_]usize{ 0, 1, 2 }));
+
+    // Test 3: NewAxis at position 2 (after first two dims)
+    // [Index=0, Range, NewAxis, Range]
+    // Result: [[[1,2,3]], [[4,5,6]]] with shape [2, 1, 3]
+    const sliced3 = try view.slice(
+        &[_]slice_mod.Slice{
+            .{ .Index = 0 },
+            .{ .Range = .{} },
+            .NewAxis,
+            .{ .Range = .{} },
+        },
+        allocator,
+    );
+    defer sliced3.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 3), sliced3.dims.len);
+    try std.testing.expectEqual(@as(usize, 2), sliced3.dims[0]);
+    try std.testing.expectEqual(@as(usize, 1), sliced3.dims[1]);
+    try std.testing.expectEqual(@as(usize, 3), sliced3.dims[2]);
+    try std.testing.expectEqual(@as(?u32, 1), sliced3.get(&[_]usize{ 0, 0, 0 }));
+    try std.testing.expectEqual(@as(?u32, 2), sliced3.get(&[_]usize{ 0, 0, 1 }));
+    try std.testing.expectEqual(@as(?u32, 3), sliced3.get(&[_]usize{ 0, 0, 2 }));
+    try std.testing.expectEqual(@as(?u32, 4), sliced3.get(&[_]usize{ 1, 0, 0 }));
+    try std.testing.expectEqual(@as(?u32, 5), sliced3.get(&[_]usize{ 1, 0, 1 }));
+    try std.testing.expectEqual(@as(?u32, 6), sliced3.get(&[_]usize{ 1, 0, 2 }));
+
+    // Test 4: NewAxis at position 3 (end)
+    // [Index=0, Range, Range, NewAxis]
+    // Result: [[[1],[2],[3]], [[4],[5],[6]]] with shape [2, 3, 1]
+    const sliced4 = try view.slice(
+        &[_]slice_mod.Slice{
+            .{ .Index = 0 },
+            .{ .Range = .{} },
+            .{ .Range = .{} },
+            .NewAxis,
+        },
+        allocator,
+    );
+    defer sliced4.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 3), sliced4.dims.len);
+    try std.testing.expectEqual(@as(usize, 2), sliced4.dims[0]);
+    try std.testing.expectEqual(@as(usize, 3), sliced4.dims[1]);
+    try std.testing.expectEqual(@as(usize, 1), sliced4.dims[2]);
+    try std.testing.expectEqual(@as(?u32, 1), sliced4.get(&[_]usize{ 0, 0, 0 }));
+    try std.testing.expectEqual(@as(?u32, 2), sliced4.get(&[_]usize{ 0, 1, 0 }));
+    try std.testing.expectEqual(@as(?u32, 3), sliced4.get(&[_]usize{ 0, 2, 0 }));
+    try std.testing.expectEqual(@as(?u32, 4), sliced4.get(&[_]usize{ 1, 0, 0 }));
+    try std.testing.expectEqual(@as(?u32, 5), sliced4.get(&[_]usize{ 1, 1, 0 }));
+    try std.testing.expectEqual(@as(?u32, 6), sliced4.get(&[_]usize{ 1, 2, 0 }));
 }
 
 test "ArrayView - slice mutability preserved" {
@@ -453,7 +559,7 @@ pub fn ConstArrayView(comptime T: type) type {
     };
 }
 
-test ConstArrayView {
+test "ConstArrayView - standalone use" {
     const data = [_]f32{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
     const dims = [_]usize{ 2, 3 };
     const strides = [_]isize{ 3, 1 }; // C-order strides
@@ -481,4 +587,31 @@ test ConstArrayView {
     // Test bounds checking
     try std.testing.expectEqual(@as(?f32, null), view.get(&[_]usize{ 2, 0 }));
     try std.testing.expectEqual(@as(?f32, null), view.get(&[_]usize{ 0, 3 }));
+}
+
+test "ConstArrayView - slice immutability preserved" {
+    const allocator = std.testing.allocator;
+    const data = [_]f32{ 1.0, 2.0, 3.0, 4.0 };
+    const dims = [_]usize{ 2, 2 };
+    const strides = [_]isize{ 2, 1 };
+
+    const view = ConstArrayView(f32){
+        .dims = &dims,
+        .strides = &strides,
+        .data_ptr = &data,
+    };
+
+    // Slice and mutate
+    const slices = [_]slice_mod.Slice{
+        .{ .Index = 0 },
+        .{ .Range = .{} },
+    };
+    const sliced = try view.slice(&slices, allocator);
+    defer allocator.free(sliced.dims);
+    defer allocator.free(sliced.strides);
+
+    // Verify return type is *const f32
+    const ptr = sliced.at(&[_]usize{ 0, 1 });
+    const ptr_type = @TypeOf(ptr.?);
+    try std.testing.expect(ptr_type == *const f32);
 }
