@@ -89,19 +89,19 @@ fn toSlice(comptime value: anytype) Slice {
                 0 => {},
                 1 => {
                     const f0 = @field(value, fields[0].name);
-                    assignInt(&range.start, f0, "start");
+                    assignOptInt(&range.start, f0, "start");
                 },
                 2 => {
                     const f0 = @field(value, fields[0].name);
                     const f1 = @field(value, fields[1].name);
-                    assignInt(&range.start, f0, "start");
+                    assignOptInt(&range.start, f0, "start");
                     assignOptInt(&range.end, f1, "end");
                 },
                 3 => {
                     const f0 = @field(value, fields[0].name);
                     const f1 = @field(value, fields[1].name);
                     const f2 = @field(value, fields[2].name);
-                    assignInt(&range.start, f0, "start");
+                    assignOptInt(&range.start, f0, "start");
                     assignOptInt(&range.end, f1, "end");
                     assignInt(&range.step, f2, "step");
                 },
@@ -158,7 +158,6 @@ fn assignInt(field: *isize, val: anytype, comptime field_name: []const u8) void 
         },
         .null => {
             // Null passed to non-optional field - skip assignment (keep default)
-            // This allows .{ null, 10 } to set only end, keeping start at default
         },
         .optional => |opt| {
             switch (@typeInfo(opt.child)) {
@@ -196,7 +195,7 @@ test "slice format function" {
     try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = 1, .end = 10 } }, slices[3]);
     try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = 1, .end = 10, .step = 2 } }, slices[4]);
     try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = -5, .end = null, .step = 2 } }, slices[5]);
-    try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = 0, .end = null, .step = 2 } }, slices[6]);
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = null, .end = null, .step = 2 } }, slices[6]);
     try std.testing.expectEqualDeep(Slice{ .Index = 5 }, slices[7]);
     try std.testing.expectEqualDeep(All, slices[8]);
     try std.testing.expectEqualDeep(Etc, slices[9]);

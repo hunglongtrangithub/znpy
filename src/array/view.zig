@@ -10,6 +10,7 @@ const slice_mod = @import("../slice.zig");
 fn strideOffset(dims: []const usize, strides: []const isize, index: []const usize) ?isize {
     // Dimension mismatch
     if (index.len != dims.len) return null;
+    std.debug.assert(strides.len == dims.len);
 
     var offset: isize = 0;
 
@@ -29,7 +30,10 @@ fn strideOffset(dims: []const usize, strides: []const isize, index: []const usiz
 /// Compute the flat array offset for a given multi-dimensional index without bounds checking.
 ///
 /// SAFETY: The caller MUST ensure that all indices are within bounds.
-/// Undefined behavior if any `index[i] >= dims[i]` or if`index.len != dims.len`.
+/// Undefined behavior if any `index[i] >= dims[i]` or if `index.len != dims.len`.
+///
+/// When a dimension size is 0, any index for that dimension is out of bounds,
+/// so this function must never be called in that case.
 fn strideOffsetUnchecked(strides: []const isize, index: []const usize) isize {
     var offset: isize = 0;
     for (index, strides) |idx, stride| {
@@ -37,6 +41,42 @@ fn strideOffsetUnchecked(strides: []const isize, index: []const usize) isize {
         offset += idx_isize * stride;
     }
     return offset;
+}
+
+test "strideOffset - valid index" {
+    const dims = [_]usize{ 2, 3, 4 };
+    const strides = [_]isize{ 12, 4, 1 }; // C-order strides
+
+    const index = [_]usize{ 1, 2, 3 };
+    const offset = strideOffset(&dims, &strides, &index);
+    try std.testing.expectEqual(@as(isize, 23), offset.?);
+}
+
+test "strideOffset - out of bounds index" {
+    const dims = [_]usize{ 2, 3, 4 };
+    const strides = [_]isize{ 12, 4, 1 };
+
+    const index = [_]usize{ 2, 0, 0 }; // Out of bounds in first dimension
+    const offset = strideOffset(&dims, &strides, &index);
+    try std.testing.expectEqual(null, offset);
+}
+
+test "strideOffset - empty shape" {
+    const dims = [_]usize{};
+    const strides = [_]isize{};
+
+    const index = [_]usize{};
+    const offset = strideOffset(&dims, &strides, &index);
+    try std.testing.expectEqual(@as(isize, 0), offset.?);
+}
+
+test "strideOffset - empty array" {
+    const dims = [_]usize{ 0, 3 };
+    const strides = [_]isize{ 3, 1 };
+
+    const index = [_]usize{ 0, 0 };
+    const offset = strideOffset(&dims, &strides, &index);
+    try std.testing.expectEqual(null, offset);
 }
 
 /// A mutable view into a multi-dimensional array.
@@ -239,22 +279,22 @@ test "ArrayView - slice with negative step" {
         .data_ptr = &data,
     };
 
-    // Test 1: should give [2, 1]
+    // Test 1: should give [3, 2]
     // With negative step, we go from end-1 backwards to start
     {
         const slices = [_]slice_mod.Slice{
-            .{ .Range = .{ .start = 1, .end = 3, .step = -1 } },
+            .{ .Range = .{ .start = 3, .end = 1, .step = -1 } },
         };
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);
 
         try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
-        try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&.{0}));
-        try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
+        try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
+        try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&.{1}));
     }
 
-    // Test 2: should give [3, 1]
-    // Range from 1 to end (4), step -2, starts at index 3
+    // Test 2: should give [1]
+    // Range from 1 to end (-3), step -2, starts at index 1
     {
         const slices = [_]slice_mod.Slice{
             .{ .Range = .{ .start = 1, .end = null, .step = -2 } },
@@ -262,28 +302,27 @@ test "ArrayView - slice with negative step" {
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);
 
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
-        try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
-        try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
+        try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
+        try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{0}));
     }
 
-    // Test 3: should give [3, 1]
+    // Test 3: should give [1, 3]
     {
         const slices = [_]slice_mod.Slice{
-            .{ .Range = .{ .start = 0, .end = 4, .step = -2 } },
+            .{ .Range = .{ .start = 4, .end = 0, .step = -2 } },
         };
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);
 
         try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
-        try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
         try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
+        try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
     }
 
     // Test 4: should give [3, 1]
     {
         const slices = [_]slice_mod.Slice{
-            .{ .Range = .{ .start = 0, .end = null, .step = -2 } },
+            .{ .Range = .{ .start = null, .end = 0, .step = -2 } },
         };
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);
@@ -293,10 +332,10 @@ test "ArrayView - slice with negative step" {
         try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
     }
 
-    // Test 5: arr.slice(s![..;-2]) should give [3, 1] (start defaults to 0)
+    // Test 5: should give [3, 1]
     {
         const slices = [_]slice_mod.Slice{
-            .{ .Range = .{ .start = 0, .end = null, .step = -2 } },
+            .{ .Range = .{ .start = null, .end = 0, .step = -2 } },
         };
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);

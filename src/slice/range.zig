@@ -1,7 +1,6 @@
 const std = @import("std");
 
 /// Convert a possibly negative index into a non-negative index based on the dimension size.
-/// `dim_size` must not be more than `std.math.MaxInt(isize)` to prevent overflow.
 /// Reuturn the absolute index if valid, otherwise `null`.
 /// Example:
 /// ```zig
@@ -27,11 +26,31 @@ pub fn absoluteIndex(index: isize, dim_size: usize) ?usize {
     }
 }
 
+test "absoluteIndex - non-negative index" {
+    try std.testing.expectEqual(0, absoluteIndex(0, 10));
+    try std.testing.expectEqual(5, absoluteIndex(5, 10));
+    try std.testing.expectEqual(null, absoluteIndex(10, 10));
+    try std.testing.expectEqual(null, absoluteIndex(11, 10));
+}
+
+test "absoluteIndex - negative index" {
+    try std.testing.expectEqual(9, absoluteIndex(-1, 10));
+    try std.testing.expectEqual(5, absoluteIndex(-5, 10));
+    try std.testing.expectEqual(0, absoluteIndex(-10, 10));
+    try std.testing.expectEqual(null, absoluteIndex(-11, 10));
+}
+
+test "absoluteIndex - 0 dimension size" {
+    try std.testing.expectEqual(null, absoluteIndex(0, 0));
+    try std.testing.expectEqual(null, absoluteIndex(1, 0));
+    try std.testing.expectEqual(null, absoluteIndex(-1, 0));
+}
+
 pub const Range = struct {
-    /// Start index (inclusive).
+    /// Start index (inclusive). If null, defaults based on step direction.
     /// Negatives are counted from the back of the axis.
-    start: isize = 0,
-    /// End index (exclusive). If null, goes to the end.
+    start: ?isize = null,
+    /// End index (exclusive). If null, defaults based on step direction.
     /// Negatives are counted from the back of the axis.
     end: ?isize = null,
     /// Step size. Should never be zero.
@@ -40,71 +59,140 @@ pub const Range = struct {
 
     const Self = @This();
 
-    /// Convert the possibly negative start and end indices to absolute (non-negative, non-null) indices
-    /// based on the given dimension size.
-    /// Return null when range values are invalid:
-    ///
-    /// 1. The start index (after converting negative indices) exceeds the dimension size
-    /// 2. The end index (after converting negative indices) exceeds the dimension size
-    /// 3. The step is zero
-    ///
-    /// On valid inputs, return { start, end, step }
-    pub fn toAbsolute(self: Self, dim_size: usize) ?struct { usize, usize, isize } {
-        const abs_start = absoluteIndex(self.start, dim_size) orelse return null;
-
-        // Handle end index: can be dim_size (exclusive upper bound)
-        const abs_end = if (self.end) |e| blk: {
-            if (e >= 0) {
-                const abs_e: usize = @intCast(e);
-                // Allow end to equal dim_size (exclusive bound)
-                if (abs_e > dim_size) break :blk dim_size + 1; // will fail validation
-                break :blk abs_e;
-            } else {
-                break :blk absoluteIndex(e, dim_size) orelse return null;
-            }
-        } else dim_size;
-
-        // Validate indices
-        if (abs_start < dim_size and abs_end <= dim_size and self.step != 0) {
-            return .{ abs_start, abs_end, self.step };
+    /// Normalize range indicies based on dimension size.
+    /// The given dimension size must be no greater than `std.math.maxInt(isize)`.
+    /// Range of normalized indicies for start and end:
+    /// - start: `[0, dim_size - 1]`
+    /// - end: `[-1, dim_size]`
+    /// Return `null` when step is 0.]
+    /// Return value is a struct of (start, num_elements).
+    pub fn normalize(self: Self, dim_size: usize) ?struct { isize, usize } {
+        // step must not be zero
+        if (self.step == 0) {
+            return null;
         }
 
-        return null;
+        // dim_size must fit in isize
+        const n = @as(isize, @intCast(dim_size));
+
+        if (n == 0) {
+            // It's obvious number of elements is zero,
+            // but start index should be zero so that
+            // slicing works correctly, by not changing
+            // the current pointer offset.
+            return .{ 0, 0 };
+        }
+
+        // Get default indicies for start and end
+        const default_start: isize = if (self.step > 0) 0 else -1;
+        const default_end: isize = if (self.step > 0) n else -n - 1;
+
+        // Fill default values
+        var start = self.start orelse default_start;
+        var end = self.end orelse default_end;
+
+        // Normalize start and end
+        start = if (start >= 0) start else n + start;
+        end = if (end >= 0) end else n + end;
+
+        // Clamp start and end
+        // start: [0, n-1]
+        // end: [-1, n]
+        start = @min(@max(0, start), n - 1);
+        end = @min(@max(-1, end), n);
+
+        // Calculate number of elements from the processed start and end
+        const num_elements: usize = blk: {
+            if (self.step > 0) {
+                if (end <= start) break :blk 0;
+                const range_size = @as(usize, @intCast(end - start));
+                const abs_step = @as(usize, @intCast(self.step));
+                break :blk (range_size + abs_step - 1) / abs_step;
+            } else {
+                if (start <= end) break :blk 0;
+                const range_size = @as(usize, @intCast(start - end));
+                const abs_step = @as(usize, @intCast(-self.step));
+                break :blk (range_size + abs_step - 1) / abs_step;
+            }
+        };
+
+        return .{ start, num_elements };
     }
 };
 
-test "asboluteIndex" {
-    try std.testing.expectEqual(2, absoluteIndex(2, 5).?);
-    try std.testing.expectEqual(4, absoluteIndex(-1, 5).?);
-    try std.testing.expectEqual(0, absoluteIndex(-5, 5).?);
-    try std.testing.expectEqual(0, absoluteIndex(0, 5).?);
-    try std.testing.expectEqual(4, absoluteIndex(4, 5).?);
-    try std.testing.expectEqual(null, absoluteIndex(5, 5));
-    try std.testing.expectEqual(null, absoluteIndex(-6, 5));
+test "range normalization - default start" {
+    const r = Range{ .end = 5, .step = 1 };
+    const normalized = r.normalize(10).?;
+    try std.testing.expectEqual(0, normalized.@"0");
+    try std.testing.expectEqual(5, normalized.@"1");
+
+    const r2 = Range{ .end = 5, .step = -1 };
+    const normalized2 = r2.normalize(10).?;
+    try std.testing.expectEqual(9, normalized2.@"0");
+    try std.testing.expectEqual(4, normalized2.@"1");
 }
 
-test "Range toAbsolute" {
-    const r1 = Range{ .start = 2, .end = 5, .step = 1 };
-    const abs1 = r1.toAbsolute(10).?;
-    try std.testing.expectEqual(.{ 2, 5, 1 }, abs1);
+test "range normalization - default end" {
+    const r = Range{ .start = 3, .step = 1 };
+    const normalized = r.normalize(10).?;
+    try std.testing.expectEqual(3, normalized.@"0");
+    try std.testing.expectEqual(7, normalized.@"1");
 
-    const r2 = Range{ .start = -5, .end = null, .step = 2 };
-    const abs2 = r2.toAbsolute(10).?;
-    try std.testing.expectEqual(.{ 5, 10, 2 }, abs2);
+    const r2 = Range{ .start = 7, .step = -1 };
+    const normalized2 = r2.normalize(10).?;
+    try std.testing.expectEqual(7, normalized2.@"0");
+    try std.testing.expectEqual(8, normalized2.@"1");
+}
 
-    const r3 = Range{ .start = 0, .end = -1, .step = -1 };
-    const abs3 = r3.toAbsolute(10).?;
-    try std.testing.expectEqual(.{ 0, 9, -1 }, abs3);
+test "range normalization - negative and non-negative indicies" {
+    const r = Range{ .start = -7, .end = 5, .step = 1 };
+    const normalized = r.normalize(10).?;
+    try std.testing.expectEqual(3, normalized.@"0");
+    try std.testing.expectEqual(2, normalized.@"1");
 
-    const r4 = Range{ .start = 11, .end = null, .step = 1 };
-    try std.testing.expectEqual(null, r4.toAbsolute(10));
+    const r2 = Range{ .start = 2, .end = -10, .step = -1 };
+    const normalized2 = r2.normalize(10).?;
+    try std.testing.expectEqual(2, normalized2.@"0");
+    try std.testing.expectEqual(2, normalized2.@"1");
+}
 
-    const r5 = Range{ .start = 10, .end = null, .step = 1 };
-    try std.testing.expectEqual(null, r5.toAbsolute(10));
+test "range normalization - clamping" {
+    const r = Range{ .start = -20, .end = 15, .step = 1 };
+    const normalized = r.normalize(10).?;
+    try std.testing.expectEqual(0, normalized.@"0");
+    try std.testing.expectEqual(10, normalized.@"1");
 
-    const r6 = Range{ .start = 0, .end = 12, .step = 1 };
-    try std.testing.expectEqual(null, r6.toAbsolute(10));
+    const r2 = Range{ .start = 15, .end = -20, .step = -1 };
+    const normalized2 = r2.normalize(10).?;
+    try std.testing.expectEqual(9, normalized2.@"0");
+    try std.testing.expectEqual(10, normalized2.@"1");
+}
 
-    const r7 = Range{ .start = 0, .end = 5, .step = 0 };
-    try std.testing.expectEqual(null, r7.toAbsolute(10));
+test "range normalization - zero elements" {
+    const r = Range{ .start = 5, .end = 5, .step = 1 };
+    const normalized = r.normalize(10).?;
+    try std.testing.expectEqual(5, normalized.@"0");
+    try std.testing.expectEqual(0, normalized.@"1");
+
+    const r2 = Range{ .start = 5, .end = 5, .step = -1 };
+    const normalized2 = r2.normalize(10).?;
+    try std.testing.expectEqual(5, normalized2.@"0");
+    try std.testing.expectEqual(0, normalized2.@"1");
+
+    const r3 = Range{ .start = 7, .end = 5, .step = 1 };
+    const normalized3 = r3.normalize(10).?;
+    try std.testing.expectEqual(7, normalized3.@"0");
+    try std.testing.expectEqual(0, normalized3.@"1");
+}
+
+test "range normalization - zero dimension size" {
+    const r = Range{ .start = 0, .end = 0, .step = 1 };
+    const normalized = r.normalize(0).?;
+    try std.testing.expectEqual(0, normalized.@"0");
+    try std.testing.expectEqual(0, normalized.@"1");
+
+    const r2 = Range{ .start = 0, .end = 0, .step = -1 };
+    const normalized2 = r2.normalize(0).?;
+    try std.testing.expectEqual(0, normalized2.@"0");
+    try std.testing.expectEqual(0, normalized2.@"1");
 }

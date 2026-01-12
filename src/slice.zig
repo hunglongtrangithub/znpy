@@ -128,6 +128,8 @@ fn expandEllipsis(
 /// Calculate the new dims and strides arrays based on the given slices.
 /// `dims` and `strides` are the original array's dimensions and strides,
 /// and must have the same length.
+/// The values in `dims` and `strides` MUST correspond to ones of a
+/// non-empty array (i.e., no dimension is zero).
 /// Return the new dims and strides arrays along with the offset to the
 ///  first element of the sliced view.
 /// The caller owns the returned view's dims and strides arrays.
@@ -197,26 +199,20 @@ pub fn applySlices(
                 // Index: collapse this dimension
                 const abs_idx = range_mod.absoluteIndex(idx, dims[in_axis]) orelse
                     return SliceError.InvalidIndexValue;
+                // Now index is safe to cast
                 offset += @as(isize, @intCast(abs_idx)) * strides[in_axis];
                 in_axis += 1;
             },
             .Range => |range| {
-                // Range: keep this dimension with modified stride
-                const start, const end, const step = range.toAbsolute(dims[in_axis]) orelse
+                // Range: keep this dimension with modified stride and dimension size
+                const start, const size = range.normalize(dims[in_axis]) orelse
                     return SliceError.InvalidRangeValues;
 
-                // Calculate new dimension size
-                const range_size = if (end > start) end - start else 0; // empty range if end <= start
-                const abs_step = if (step > 0) @as(usize, @intCast(step)) else @as(usize, @intCast(-step));
-                const new_size = if (range_size == 0) 0 else (range_size + abs_step - 1) / abs_step;
-
-                new_dims[out_axis] = new_size;
-                new_strides[out_axis] = strides[in_axis] * step;
+                new_dims[out_axis] = size;
+                new_strides[out_axis] = strides[in_axis] * range.step;
 
                 // Add offset to the start of the range
-                // For negative steps, start from end-1 and go backwards
-                const range_start_idx = if (step > 0) start else if (end > 0) end - 1 else 0;
-                offset += @as(isize, @intCast(range_start_idx)) * strides[in_axis];
+                offset += start * strides[in_axis];
 
                 in_axis += 1;
                 out_axis += 1;
@@ -673,6 +669,28 @@ test "slicing tests - working cases" {
         try std.testing.expectEqual(@as(?u32, 5), sliced.get(&[_]usize{ 0, 1 }));
         try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{ 0, 2 }));
     }
+
+    // Test 15: Empty array
+    {
+        const storage: [2]u32 = undefined;
+        const empty_data: []u32 = storage[0..0];
+        const empty_dims = [_]usize{ 0, 1, 2 };
+        const empty_strides = [_]isize{ 0, 0, 0 };
+        const empty_view = ArrayView(u32){
+            .dims = &empty_dims,
+            .strides = &empty_strides,
+            .data_ptr = empty_data.ptr,
+        };
+
+        const sliced = try empty_view.slice(
+            &[_]Slice{Slice.Ellipsis},
+            allocator,
+        );
+        defer sliced.deinit(allocator);
+
+        // There should be no pointer offset. Data pointer should be the same.
+        try std.testing.expectEqual(@intFromPtr(empty_data.ptr), @intFromPtr(sliced.data_ptr));
+    }
 }
 
 test "slicing tests - error cases" {
@@ -713,7 +731,7 @@ test "slicing tests - error cases" {
     {
         const result = view.slice(
             &[_]Slice{
-                .{ .Range = .{ .start = -3, .end = 5 } },
+                .{ .Range = .{ .start = -3, .end = 5, .step = 0 } },
                 .Ellipsis,
             },
             allocator,

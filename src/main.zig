@@ -55,9 +55,9 @@ pub fn main() !void {
     std.debug.assert(array.shape.dims.len == 2);
 
     try stdout.print("Array data:\n{any}\n", .{array});
-    try stdout.print("Getting slice array_view[1, :]\n", .{});
+    try stdout.print("Getting slice array_view[-4:-2:-1, :]\n", .{});
     const array_view = try array.slice(
-        &znpy.s(.{ 1, .{} }),
+        &znpy.s(.{ .{ -4, -2, -1 }, .{} }),
         allocator,
     );
     defer array_view.deinit(allocator);

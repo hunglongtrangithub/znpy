@@ -17,7 +17,9 @@ pub const Order = enum {
 };
 
 /// Returns the number of elements in the array on success, or `null` if overflow occurs.
-/// The number of bytes an array takes, given its shape and element type, must not exceed `std.math.maxInt(isize)`
+/// The number of bytes an array takes, given its shape and element type, must not exceed `std.math.maxInt(isize)`.
+/// An empty shape (zero dimensions) is valid and has size 1 (a scalar).
+/// A shape with any dimension of size zero is valid and has size 0.
 pub fn shapeSizeChecked(T: elements.ElementType, shape: []const usize) ?usize {
     // NOTE: An empty shape (zero dimensions) is valid and has size 1 (a scalar).
     const num_elements = blk: {
