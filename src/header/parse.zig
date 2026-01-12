@@ -264,7 +264,7 @@ test "parse empty map" {
     defer ast.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
-    try std.testing.expectEqual(@as(usize, 0), ast.Map.count());
+    try std.testing.expectEqual(0, ast.Map.count());
 }
 
 test "parse map with string literal" {
@@ -300,7 +300,7 @@ test "parse map with empty tuple" {
     try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
     const shape = ast.Map.get("shape").?;
     try std.testing.expectEqual(Ast.Tuple, @as(std.meta.Tag(Ast), shape));
-    try std.testing.expectEqual(@as(usize, 0), shape.Tuple.items.len);
+    try std.testing.expectEqual(0, shape.Tuple.items.len);
 }
 
 test "parse map with single-element tuple" {
@@ -312,8 +312,8 @@ test "parse map with single-element tuple" {
     try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
     const shape = ast.Map.get("shape").?;
     try std.testing.expectEqual(Ast.Tuple, @as(std.meta.Tag(Ast), shape));
-    try std.testing.expectEqual(@as(usize, 1), shape.Tuple.items.len);
-    try std.testing.expectEqual(@as(usize, 5), shape.Tuple.items[0]);
+    try std.testing.expectEqual(1, shape.Tuple.items.len);
+    try std.testing.expectEqual(5, shape.Tuple.items[0]);
 }
 
 test "parse map with multi-element tuple" {
@@ -325,10 +325,7 @@ test "parse map with multi-element tuple" {
     try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
     const shape = ast.Map.get("shape").?;
     try std.testing.expectEqual(Ast.Tuple, @as(std.meta.Tag(Ast), shape));
-    try std.testing.expectEqual(@as(usize, 3), shape.Tuple.items.len);
-    try std.testing.expectEqual(@as(usize, 3), shape.Tuple.items[0]);
-    try std.testing.expectEqual(@as(usize, 4), shape.Tuple.items[1]);
-    try std.testing.expectEqual(@as(usize, 5), shape.Tuple.items[2]);
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 3, 4, 5 }, shape.Tuple.items);
 }
 
 test "parse map with trailing comma" {
@@ -338,7 +335,7 @@ test "parse map with trailing comma" {
     defer ast.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
-    try std.testing.expectEqual(@as(usize, 2), ast.Map.count());
+    try std.testing.expectEqual(2, ast.Map.count());
 }
 
 test "parse complete npy header" {
@@ -348,7 +345,7 @@ test "parse complete npy header" {
     defer ast.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(Ast.Map, @as(std.meta.Tag(Ast), ast));
-    try std.testing.expectEqual(@as(usize, 3), ast.Map.count());
+    try std.testing.expectEqual(3, ast.Map.count());
 }
 
 test "parse nested map" {
@@ -371,7 +368,7 @@ test "parse top-level tuple" {
     defer ast.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(Ast.Tuple, @as(std.meta.Tag(Ast), ast));
-    try std.testing.expectEqual(@as(usize, 3), ast.Tuple.items.len);
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 1, 2, 3 }, ast.Tuple.items);
 }
 
 test "parse top-level literal" {

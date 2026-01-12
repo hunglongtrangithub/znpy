@@ -75,16 +75,16 @@ test "ptrFromOffset - positive stride" {
 
     // Test positive offsets
     const ptr0 = ptrFromOffset(i32, base_ptr, 0);
-    try std.testing.expectEqual(@as(i32, 10), ptr0.*);
+    try std.testing.expectEqual(10, ptr0.*);
 
     const ptr1 = ptrFromOffset(i32, base_ptr, 1);
-    try std.testing.expectEqual(@as(i32, 20), ptr1.*);
+    try std.testing.expectEqual(20, ptr1.*);
 
     const ptr2 = ptrFromOffset(i32, base_ptr, 2);
-    try std.testing.expectEqual(@as(i32, 30), ptr2.*);
+    try std.testing.expectEqual(30, ptr2.*);
 
     const ptr4 = ptrFromOffset(i32, base_ptr, 4);
-    try std.testing.expectEqual(@as(i32, 50), ptr4.*);
+    try std.testing.expectEqual(50, ptr4.*);
 }
 
 test "ptrFromOffset - zero stride" {
@@ -94,7 +94,7 @@ test "ptrFromOffset - zero stride" {
 
     const ptr = ptrFromOffset(f64, base_ptr, 0);
     try std.testing.expectEqual(@intFromPtr(base_ptr), @intFromPtr(ptr));
-    try std.testing.expectEqual(@as(f64, 3.14), ptr.*);
+    try std.testing.expectEqual(3.14, ptr.*);
 }
 
 test "ptrFromOffset - negative stride" {
@@ -106,16 +106,16 @@ test "ptrFromOffset - negative stride" {
 
     // Test negative offsets to access earlier elements
     const ptr0 = ptrFromOffset(i64, base_ptr, 0);
-    try std.testing.expectEqual(@as(i64, 500), ptr0.*);
+    try std.testing.expectEqual(500, ptr0.*);
 
     const ptr_neg1 = ptrFromOffset(i64, base_ptr, -1);
-    try std.testing.expectEqual(@as(i64, 400), ptr_neg1.*);
+    try std.testing.expectEqual(400, ptr_neg1.*);
 
     const ptr_neg2 = ptrFromOffset(i64, base_ptr, -2);
-    try std.testing.expectEqual(@as(i64, 300), ptr_neg2.*);
+    try std.testing.expectEqual(300, ptr_neg2.*);
 
     const ptr_neg4 = ptrFromOffset(i64, base_ptr, -4);
-    try std.testing.expectEqual(@as(i64, 100), ptr_neg4.*);
+    try std.testing.expectEqual(100, ptr_neg4.*);
 }
 
 test "ptrFromOffset - const pointer" {
@@ -124,7 +124,7 @@ test "ptrFromOffset - const pointer" {
     const base_ptr: [*]const u16 = &buffer;
 
     const ptr1 = ptrFromOffset(u16, base_ptr, 1);
-    try std.testing.expectEqual(@as(u16, 2), ptr1.*);
+    try std.testing.expectEqual(2, ptr1.*);
 
     // Verify the returned type is also const
     const ptr_type = @TypeOf(ptr1);
@@ -140,19 +140,20 @@ test "ptrFromOffset - mixed positive and negative from middle" {
 
     // Access from middle
     const ptr0 = ptrFromOffset(i8, base_ptr, 0);
-    try std.testing.expectEqual(@as(i8, 40), ptr0.*);
+    try std.testing.expectEqual(40, ptr0.*);
 
     // Positive direction
     const ptr_pos1 = ptrFromOffset(i8, base_ptr, 1);
-    try std.testing.expectEqual(@as(i8, 50), ptr_pos1.*);
+    try std.testing.expectEqual(50, ptr_pos1.*);
 
     const ptr_pos3 = ptrFromOffset(i8, base_ptr, 3);
-    try std.testing.expectEqual(@as(i8, 70), ptr_pos3.*);
+    try std.testing.expectEqual(70, ptr_pos3.*);
 
     // Negative direction
     const ptr_neg1 = ptrFromOffset(i8, base_ptr, -1);
-    try std.testing.expectEqual(@as(i8, 30), ptr_neg1.*);
+    try std.testing.expectEqual(30, ptr_neg1.*);
 
     const ptr_neg3 = ptrFromOffset(i8, base_ptr, -3);
-    try std.testing.expectEqual(@as(i8, 10), ptr_neg3.*);
+    try std.testing.expectEqual(10, ptr_neg3.*);
 }
+

@@ -299,14 +299,14 @@ test "DynamicArray - atUnchecked() for performance" {
 
     // atUnchecked skips bounds checking
     const ptr0 = array.atUnchecked(&[_]usize{0});
-    try std.testing.expectEqual(@as(i32, 10), ptr0.*);
+    try std.testing.expectEqual(10, ptr0.*);
 
     const ptr4 = array.atUnchecked(&[_]usize{4});
-    try std.testing.expectEqual(@as(i32, 50), ptr4.*);
+    try std.testing.expectEqual(50, ptr4.*);
 
     // Can modify through the pointer
     ptr0.* = 100;
-    try std.testing.expectEqual(@as(i32, 100), data[0]);
+    try std.testing.expectEqual(100, data[0]);
 }
 
 test "ConstDynamicArray - public at() returns const pointer" {

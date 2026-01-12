@@ -423,12 +423,12 @@ test "StaticArrayView(u8, 2) - modification through pointer" {
 
     // Modify through the view
     const ptr = view.at([_]usize{ 1, 1 }).?;
-    try std.testing.expectEqual(@as(u8, 4), ptr.*);
+    try std.testing.expectEqual(4, ptr.*);
     ptr.* = 99;
 
     // Verify modification
-    try std.testing.expectEqual(@as(u8, 99), view.at([_]usize{ 1, 1 }).?.*);
-    try std.testing.expectEqual(@as(u8, 99), data[4]);
+    try std.testing.expectEqual(99, view.at([_]usize{ 1, 1 }).?.*);
+    try std.testing.expectEqual(99, data[4]);
 }
 
 test "StaticArrayView(i16, 3) - single element in each dimension" {

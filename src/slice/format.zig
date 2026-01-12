@@ -69,7 +69,7 @@ fn toSlice(comptime value: anytype) Slice {
     switch (value_type_info) {
         // Single integer (comptime known)
         .comptime_int => {
-            const v = @as(isize, @intCast(value));
+            const v: isize = @intCast(value);
             return Slice{ .Index = v };
         },
         // Normal integers

@@ -73,7 +73,7 @@ pub const Range = struct {
         }
 
         // dim_size must fit in isize
-        const n = @as(isize, @intCast(dim_size));
+        const n: isize = @intCast(dim_size);
 
         if (n == 0) {
             // It's obvious number of elements is zero,
@@ -105,13 +105,13 @@ pub const Range = struct {
         const num_elements: usize = blk: {
             if (self.step > 0) {
                 if (end <= start) break :blk 0;
-                const range_size = @as(usize, @intCast(end - start));
-                const abs_step = @as(usize, @intCast(self.step));
+                const range_size: usize = @intCast(end - start);
+                const abs_step: usize = @intCast(self.step);
                 break :blk (range_size + abs_step - 1) / abs_step;
             } else {
                 if (start <= end) break :blk 0;
-                const range_size = @as(usize, @intCast(start - end));
-                const abs_step = @as(usize, @intCast(-self.step));
+                const range_size: usize = @intCast(start - end);
+                const abs_step: usize = @intCast(-self.step);
                 break :blk (range_size + abs_step - 1) / abs_step;
             }
         };

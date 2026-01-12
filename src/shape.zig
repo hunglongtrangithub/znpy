@@ -49,26 +49,26 @@ test "shapeSizeChecked - normal shape" {
     // normal shape
     const shape = [_]usize{ 3, 4, 5 };
     const result = shapeSizeChecked(.{ .Float64 = null }, &shape);
-    try std.testing.expectEqual(@as(usize, 60), result.?);
+    try std.testing.expectEqual(60, result.?);
 }
 
 test "shapeSizeChecked - empty shape" {
     // empty shape
     const shape = [_]usize{};
     const result = shapeSizeChecked(.{ .Float64 = null }, &shape);
-    try std.testing.expectEqual(@as(usize, 1), result.?);
+    try std.testing.expectEqual(1, result.?);
 }
 
 test "shapeSizeChecked - shape with zero dimension" {
     const shape = [_]usize{ 3, 0, 5 };
     const result = shapeSizeChecked(.{ .Float64 = null }, &shape);
-    try std.testing.expectEqual(@as(usize, 0), result.?);
+    try std.testing.expectEqual(0, result.?);
 }
 
 test "shapeSizeChecked - overflow in element count" {
     const shape = [_]usize{ std.math.maxInt(usize), 2 };
     const result = shapeSizeChecked(.{ .Float64 = null }, &shape);
-    try std.testing.expectEqual(@as(?usize, null), result);
+    try std.testing.expectEqual(null, result);
 }
 
 test "shapeSizeChecked - overflow in byte count" {
@@ -76,13 +76,13 @@ test "shapeSizeChecked - overflow in byte count" {
     const huge = std.math.maxInt(usize) / 2;
     const shape = [_]usize{huge};
     const result = shapeSizeChecked(.{ .Float64 = null }, &shape); // 8 bytes per f64
-    try std.testing.expectEqual(@as(?usize, null), result);
+    try std.testing.expectEqual(null, result);
 }
 
 test "shapeSizeChecked - exceeds isize max" {
     // Try to create a shape that exceeds maxInt(isize)
-    const limit = @as(usize, @intCast(std.math.maxInt(isize)));
+    const limit = @as(usize, std.math.maxInt(isize));
     const shape = [_]usize{limit / 7 + 1}; // Will exceed when multiplied by 8 (f64 size)
     const result = shapeSizeChecked(.{ .Float64 = null }, &shape);
-    try std.testing.expectEqual(@as(?usize, null), result);
+    try std.testing.expectEqual(null, result);
 }

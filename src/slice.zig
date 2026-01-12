@@ -131,7 +131,7 @@ fn expandEllipsis(
 /// The values in `dims` and `strides` MUST correspond to ones of a
 /// non-empty array (i.e., no dimension is zero).
 /// Return the new dims and strides arrays along with the offset to the
-///  first element of the sliced view.
+///  first element of the sliced view: `.{ new_dims, new_strides, offset }`.
 /// The caller owns the returned view's dims and strides arrays.
 pub fn applySlices(
     dims: []const usize,
@@ -358,6 +358,96 @@ test "Ellipsis expansion at end" {
     );
 }
 
+test "applySlices - basic slicing" {
+    const allocator = std.testing.allocator;
+    const dims = [_]usize{ 4, 5, 6 };
+    const strides = [_]isize{ 30, 6, 1 }; // C-order
+
+    const slices = &[_]Slice{
+        .{ .Index = 1 },
+        .{ .Range = .{ .start = 2, .end = 5, .step = 2 } },
+        .NewAxis,
+        .{ .Range = .{} },
+    };
+
+    const new_dims, const new_strides, const new_offset = try applySlices(
+        &dims,
+        &strides,
+        slices,
+        allocator,
+    );
+    defer allocator.free(new_dims);
+    defer allocator.free(new_strides);
+
+    try std.testing.expectEqualSlices(
+        usize,
+        &[_]usize{
+            2, // from range
+            1, // new axis
+            6, // from full range
+        },
+        new_dims,
+    );
+
+    try std.testing.expectEqualSlices(
+        isize,
+        &[_]isize{
+            12, // stride adjusted by step
+            0, // new axis stride
+            1, // original stride
+        },
+        new_strides,
+    );
+
+    try std.testing.expectEqual(42, new_offset); // offset = 1*30 + 2*6
+}
+
+test "applySlices - empty array's dimensions and strides" {
+    const allocator = std.testing.allocator;
+    const dims = [_]usize{ 0, 5, 6 };
+    const strides = [_]isize{ 0, 0, 0 }; // empty array -> all strides are 0
+
+    const slices = &[_]Slice{
+        .{ .Range = .{ .start = 2, .end = 5, .step = 2 } },
+        .NewAxis,
+        .{ .Index = 1 },
+        .{ .Range = .{} },
+    };
+
+    const new_dims, const new_strides, const new_offset = try applySlices(
+        &dims,
+        &strides,
+        slices,
+        allocator,
+    );
+
+    defer allocator.free(new_dims);
+    defer allocator.free(new_strides);
+
+    try std.testing.expectEqualSlices(
+        usize,
+        &[_]usize{
+            0, // from range
+            1, // new axis
+            6, // from full range
+        },
+        new_dims,
+    );
+
+    try std.testing.expectEqualSlices(
+        isize,
+        &[_]isize{
+            0, // from range
+            0, // new axis stride
+            0, // from full range
+        },
+        new_strides,
+    );
+
+    // Offset is always zero for empty arrays
+    try std.testing.expectEqual(0, new_offset);
+}
+
 test "slicing tests - working cases" {
     const allocator = std.testing.allocator;
     var data = [_]u32{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
@@ -382,12 +472,14 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims[1]);
-        try std.testing.expectEqual(@as(?u32, 1), sliced.get(&[_]usize{ 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 3), sliced.get(&[_]usize{ 0, 2 }));
-        try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{ 1, 2 }));
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 2, 3 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(1, sliced.get(&[_]usize{ 0, 0 }));
+        try std.testing.expectEqual(3, sliced.get(&[_]usize{ 0, 2 }));
+        try std.testing.expectEqual(6, sliced.get(&[_]usize{ 1, 2 }));
     }
 
     // Test 2: Single Index - get second 2x3 slice
@@ -403,9 +495,13 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims.len);
-        try std.testing.expectEqual(@as(?u32, 7), sliced.get(&[_]usize{ 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 12), sliced.get(&[_]usize{ 1, 2 }));
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 2, 3 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(7, sliced.get(&[_]usize{ 0, 0 }));
+        try std.testing.expectEqual(12, sliced.get(&[_]usize{ 1, 2 }));
     }
 
     // Test 3: Double Index - get specific row
@@ -422,11 +518,14 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims[0]);
-        try std.testing.expectEqual(@as(?u32, 4), sliced.get(&[_]usize{0}));
-        try std.testing.expectEqual(@as(?u32, 5), sliced.get(&[_]usize{1}));
-        try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{2}));
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{3},
+            sliced.dims,
+        );
+        try std.testing.expectEqual(4, sliced.get(&[_]usize{0}));
+        try std.testing.expectEqual(5, sliced.get(&[_]usize{1}));
+        try std.testing.expectEqual(6, sliced.get(&[_]usize{2}));
     }
 
     // Test 4: Range with bounds - get middle column
@@ -442,13 +541,16 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[1]);
-        try std.testing.expectEqual(@as(?u32, 2), sliced.get(&[_]usize{ 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 5), sliced.get(&[_]usize{ 0, 1 }));
-        try std.testing.expectEqual(@as(?u32, 8), sliced.get(&[_]usize{ 1, 0 }));
-        try std.testing.expectEqual(@as(?u32, 11), sliced.get(&[_]usize{ 1, 1 }));
+
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 2, 2 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(2, sliced.get(&[_]usize{ 0, 0 }));
+        try std.testing.expectEqual(5, sliced.get(&[_]usize{ 0, 1 }));
+        try std.testing.expectEqual(8, sliced.get(&[_]usize{ 1, 0 }));
+        try std.testing.expectEqual(11, sliced.get(&[_]usize{ 1, 1 }));
     }
 
     // Test 5: NewAxis at front
@@ -465,12 +567,13 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[1]);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims[2]);
-        try std.testing.expectEqual(@as(?u32, 1), sliced.get(&[_]usize{ 0, 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{ 0, 1, 2 }));
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 1, 2, 3 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(1, sliced.get(&[_]usize{ 0, 0, 0 }));
+        try std.testing.expectEqual(6, sliced.get(&[_]usize{ 0, 1, 2 }));
     }
 
     // Test 6: NewAxis in middle
@@ -487,12 +590,13 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[1]);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims[2]);
-        try std.testing.expectEqual(@as(?u32, 1), sliced.get(&[_]usize{ 0, 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{ 0, 1, 2 }));
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 1, 2, 3 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(1, sliced.get(&[_]usize{ 0, 0, 0 }));
+        try std.testing.expectEqual(6, sliced.get(&[_]usize{ 0, 1, 2 }));
     }
 
     // Test 7: NewAxis after two ranges
@@ -510,14 +614,16 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims[1]);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims[2]);
-        try std.testing.expectEqual(@as(?u32, 1), sliced.get(&[_]usize{ 0, 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 3), sliced.get(&[_]usize{ 0, 0, 2 }));
-        try std.testing.expectEqual(@as(?u32, 4), sliced.get(&[_]usize{ 1, 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{ 1, 0, 2 }));
+
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 2, 1, 3 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(1, sliced.get(&[_]usize{ 0, 0, 0 }));
+        try std.testing.expectEqual(3, sliced.get(&[_]usize{ 0, 0, 2 }));
+        try std.testing.expectEqual(4, sliced.get(&[_]usize{ 1, 0, 0 }));
+        try std.testing.expectEqual(6, sliced.get(&[_]usize{ 1, 0, 2 }));
     }
 
     // Test 8: NewAxis at end
@@ -534,16 +640,18 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims[1]);
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims[2]);
-        try std.testing.expectEqual(@as(?u32, 1), sliced.get(&[_]usize{ 0, 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 2), sliced.get(&[_]usize{ 0, 1, 0 }));
-        try std.testing.expectEqual(@as(?u32, 3), sliced.get(&[_]usize{ 0, 2, 0 }));
-        try std.testing.expectEqual(@as(?u32, 4), sliced.get(&[_]usize{ 1, 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 5), sliced.get(&[_]usize{ 1, 1, 0 }));
-        try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{ 1, 2, 0 }));
+
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 2, 3, 1 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(1, sliced.get(&[_]usize{ 0, 0, 0 }));
+        try std.testing.expectEqual(2, sliced.get(&[_]usize{ 0, 1, 0 }));
+        try std.testing.expectEqual(3, sliced.get(&[_]usize{ 0, 2, 0 }));
+        try std.testing.expectEqual(4, sliced.get(&[_]usize{ 1, 0, 0 }));
+        try std.testing.expectEqual(5, sliced.get(&[_]usize{ 1, 1, 0 }));
+        try std.testing.expectEqual(6, sliced.get(&[_]usize{ 1, 2, 0 }));
     }
 
     // Test 9: Multiple NewAxis
@@ -561,13 +669,15 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims[1]);
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims[2]);
-        try std.testing.expectEqual(@as(?u32, 1), sliced.get(&[_]usize{ 0, 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 2), sliced.get(&[_]usize{ 0, 1, 0 }));
-        try std.testing.expectEqual(@as(?u32, 3), sliced.get(&[_]usize{ 0, 2, 0 }));
+
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 1, 3, 1 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(1, sliced.get(&[_]usize{ 0, 0, 0 }));
+        try std.testing.expectEqual(2, sliced.get(&[_]usize{ 0, 1, 0 }));
+        try std.testing.expectEqual(3, sliced.get(&[_]usize{ 0, 2, 0 }));
     }
 
     // Test 10: Get a specific element (all indices)
@@ -583,8 +693,8 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 0), sliced.dims.len);
-        try std.testing.expectEqual(@as(?u32, 12), sliced.get(&[_]usize{}));
+        try std.testing.expectEqual(0, sliced.dims.len);
+        try std.testing.expectEqual(12, sliced.get(&[_]usize{}));
     }
 
     // Test 11: Negative indices
@@ -599,9 +709,14 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims.len);
-        try std.testing.expectEqual(@as(?u32, 7), sliced.get(&[_]usize{ 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 12), sliced.get(&[_]usize{ 1, 2 }));
+
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 2, 3 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(7, sliced.get(&[_]usize{ 0, 0 }));
+        try std.testing.expectEqual(12, sliced.get(&[_]usize{ 1, 2 }));
     }
 
     // Test 12: Range with explicit bounds
@@ -616,12 +731,14 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[1]);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims[2]);
-        try std.testing.expectEqual(@as(?u32, 1), sliced.get(&[_]usize{ 0, 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{ 0, 1, 2 }));
+
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 1, 2, 3 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(1, sliced.get(&[_]usize{ 0, 0, 0 }));
+        try std.testing.expectEqual(6, sliced.get(&[_]usize{ 0, 1, 2 }));
     }
 
     // Test 13: Range with step
@@ -638,14 +755,15 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[1]);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[2]);
-        try std.testing.expectEqual(@as(?u32, 1), sliced.get(&[_]usize{ 0, 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 3), sliced.get(&[_]usize{ 0, 0, 1 }));
-        try std.testing.expectEqual(@as(?u32, 4), sliced.get(&[_]usize{ 0, 1, 0 }));
-        try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{ 0, 1, 1 }));
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 2, 2, 2 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(1, sliced.get(&[_]usize{ 0, 0, 0 }));
+        try std.testing.expectEqual(3, sliced.get(&[_]usize{ 0, 0, 1 }));
+        try std.testing.expectEqual(4, sliced.get(&[_]usize{ 0, 1, 0 }));
+        try std.testing.expectEqual(6, sliced.get(&[_]usize{ 0, 1, 1 }));
     }
 
     // Test 14: Combination - get diagonal-like pattern
@@ -662,19 +780,21 @@ test "slicing tests - working cases" {
             allocator,
         );
         defer sliced.deinit(allocator);
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims.len);
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
-        try std.testing.expectEqual(@as(usize, 3), sliced.dims[1]);
-        try std.testing.expectEqual(@as(?u32, 4), sliced.get(&[_]usize{ 0, 0 }));
-        try std.testing.expectEqual(@as(?u32, 5), sliced.get(&[_]usize{ 0, 1 }));
-        try std.testing.expectEqual(@as(?u32, 6), sliced.get(&[_]usize{ 0, 2 }));
+        try std.testing.expectEqualSlices(
+            usize,
+            &[_]usize{ 1, 3 },
+            sliced.dims,
+        );
+        try std.testing.expectEqual(4, sliced.get(&[_]usize{ 0, 0 }));
+        try std.testing.expectEqual(5, sliced.get(&[_]usize{ 0, 1 }));
+        try std.testing.expectEqual(6, sliced.get(&[_]usize{ 0, 2 }));
     }
 
     // Test 15: Empty array
     {
         const empty_data: []u32 = array_mod.danglingPtr(u32)[0..0];
         const empty_dims = [_]usize{ 0, 1, 2 };
-        const empty_strides = [_]isize{ 0, 0, 0 };
+        const empty_strides = [_]isize{ 0, 0, 0 }; // empty array -> all strides are 0
         const empty_view = ArrayView(u32){
             .dims = &empty_dims,
             .strides = &empty_strides,

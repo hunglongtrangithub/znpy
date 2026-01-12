@@ -49,7 +49,7 @@ test "strideOffset - valid index" {
 
     const index = [_]usize{ 1, 2, 3 };
     const offset = strideOffset(&dims, &strides, &index);
-    try std.testing.expectEqual(@as(isize, 23), offset.?);
+    try std.testing.expectEqual(23, offset.?);
 }
 
 test "strideOffset - out of bounds index" {
@@ -67,7 +67,7 @@ test "strideOffset - empty shape" {
 
     const index = [_]usize{};
     const offset = strideOffset(&dims, &strides, &index);
-    try std.testing.expectEqual(@as(isize, 0), offset.?);
+    try std.testing.expectEqual(0, offset.?);
 }
 
 test "strideOffset - empty array" {
@@ -233,8 +233,8 @@ test "ArrayView - slice with Index" {
     const sliced = try view.slice(&slices, allocator);
     defer sliced.deinit(allocator);
 
-    try std.testing.expectEqual(@as(usize, 1), sliced.dims.len);
-    try std.testing.expectEqual(@as(usize, 3), sliced.dims[0]);
+    try std.testing.expectEqual(1, sliced.dims.len);
+    try std.testing.expectEqual(3, sliced.dims[0]);
     try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&[_]usize{0}));
     try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&[_]usize{1}));
     try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&[_]usize{2}));
@@ -259,8 +259,8 @@ test "ArrayView - slice with Range and step" {
     const sliced = try view.slice(&slices, allocator);
     defer sliced.deinit(allocator);
 
-    try std.testing.expectEqual(@as(usize, 1), sliced.dims.len);
-    try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+    try std.testing.expectEqual(1, sliced.dims.len);
+    try std.testing.expectEqual(2, sliced.dims[0]);
     try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&[_]usize{0}));
     try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&[_]usize{1}));
 }
@@ -288,7 +288,7 @@ test "ArrayView - slice with negative step" {
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);
 
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+        try std.testing.expectEqual(2, sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
         try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&.{1}));
     }
@@ -302,7 +302,7 @@ test "ArrayView - slice with negative step" {
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);
 
-        try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
+        try std.testing.expectEqual(1, sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{0}));
     }
 
@@ -314,7 +314,7 @@ test "ArrayView - slice with negative step" {
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);
 
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+        try std.testing.expectEqual(2, sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
         try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
     }
@@ -327,7 +327,7 @@ test "ArrayView - slice with negative step" {
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);
 
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+        try std.testing.expectEqual(2, sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
         try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
     }
@@ -340,7 +340,7 @@ test "ArrayView - slice with negative step" {
         const sliced = try view.slice(&slices, allocator);
         defer sliced.deinit(allocator);
 
-        try std.testing.expectEqual(@as(usize, 2), sliced.dims[0]);
+        try std.testing.expectEqual(2, sliced.dims[0]);
         try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&.{0}));
         try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&.{1}));
     }
@@ -366,9 +366,8 @@ test "ArrayView - slice with NewAxis" {
     const sliced = try view.slice(&slices, allocator);
     defer sliced.deinit(allocator);
 
-    try std.testing.expectEqual(@as(usize, 2), sliced.dims.len);
-    try std.testing.expectEqual(@as(usize, 1), sliced.dims[0]);
-    try std.testing.expectEqual(@as(usize, 3), sliced.dims[1]);
+    try std.testing.expectEqual(2, sliced.dims.len);
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 1, 3 }, sliced.dims);
     try std.testing.expectEqual(@as(?f32, 1.0), sliced.get(&[_]usize{ 0, 0 }));
     try std.testing.expectEqual(@as(?f32, 2.0), sliced.get(&[_]usize{ 0, 1 }));
     try std.testing.expectEqual(@as(?f32, 3.0), sliced.get(&[_]usize{ 0, 2 }));
@@ -398,10 +397,8 @@ test "ArrayView - slice with NewAxis, Range, and Index" {
         allocator,
     );
     defer sliced1.deinit(allocator);
-    try std.testing.expectEqual(@as(usize, 3), sliced1.dims.len);
-    try std.testing.expectEqual(@as(usize, 1), sliced1.dims[0]);
-    try std.testing.expectEqual(@as(usize, 2), sliced1.dims[1]);
-    try std.testing.expectEqual(@as(usize, 3), sliced1.dims[2]);
+    try std.testing.expectEqual(3, sliced1.dims.len);
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 1, 2, 3 }, sliced1.dims);
     try std.testing.expectEqual(@as(?u32, 1), sliced1.get(&[_]usize{ 0, 0, 0 }));
     try std.testing.expectEqual(@as(?u32, 2), sliced1.get(&[_]usize{ 0, 0, 1 }));
     try std.testing.expectEqual(@as(?u32, 3), sliced1.get(&[_]usize{ 0, 0, 2 }));
@@ -422,10 +419,8 @@ test "ArrayView - slice with NewAxis, Range, and Index" {
         allocator,
     );
     defer sliced2.deinit(allocator);
-    try std.testing.expectEqual(@as(usize, 3), sliced2.dims.len);
-    try std.testing.expectEqual(@as(usize, 1), sliced2.dims[0]);
-    try std.testing.expectEqual(@as(usize, 2), sliced2.dims[1]);
-    try std.testing.expectEqual(@as(usize, 3), sliced2.dims[2]);
+    try std.testing.expectEqual(3, sliced2.dims.len);
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 1, 2, 3 }, sliced2.dims);
     try std.testing.expectEqual(@as(?u32, 1), sliced2.get(&[_]usize{ 0, 0, 0 }));
     try std.testing.expectEqual(@as(?u32, 2), sliced2.get(&[_]usize{ 0, 0, 1 }));
     try std.testing.expectEqual(@as(?u32, 3), sliced2.get(&[_]usize{ 0, 0, 2 }));
@@ -446,10 +441,8 @@ test "ArrayView - slice with NewAxis, Range, and Index" {
         allocator,
     );
     defer sliced3.deinit(allocator);
-    try std.testing.expectEqual(@as(usize, 3), sliced3.dims.len);
-    try std.testing.expectEqual(@as(usize, 2), sliced3.dims[0]);
-    try std.testing.expectEqual(@as(usize, 1), sliced3.dims[1]);
-    try std.testing.expectEqual(@as(usize, 3), sliced3.dims[2]);
+    try std.testing.expectEqual(3, sliced3.dims.len);
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 2, 1, 3 }, sliced3.dims);
     try std.testing.expectEqual(@as(?u32, 1), sliced3.get(&[_]usize{ 0, 0, 0 }));
     try std.testing.expectEqual(@as(?u32, 2), sliced3.get(&[_]usize{ 0, 0, 1 }));
     try std.testing.expectEqual(@as(?u32, 3), sliced3.get(&[_]usize{ 0, 0, 2 }));
@@ -470,10 +463,8 @@ test "ArrayView - slice with NewAxis, Range, and Index" {
         allocator,
     );
     defer sliced4.deinit(allocator);
-    try std.testing.expectEqual(@as(usize, 3), sliced4.dims.len);
-    try std.testing.expectEqual(@as(usize, 2), sliced4.dims[0]);
-    try std.testing.expectEqual(@as(usize, 3), sliced4.dims[1]);
-    try std.testing.expectEqual(@as(usize, 1), sliced4.dims[2]);
+    try std.testing.expectEqual(3, sliced4.dims.len);
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 2, 3, 1 }, sliced4.dims);
     try std.testing.expectEqual(@as(?u32, 1), sliced4.get(&[_]usize{ 0, 0, 0 }));
     try std.testing.expectEqual(@as(?u32, 2), sliced4.get(&[_]usize{ 0, 1, 0 }));
     try std.testing.expectEqual(@as(?u32, 3), sliced4.get(&[_]usize{ 0, 2, 0 }));
