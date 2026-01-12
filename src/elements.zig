@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 
 const boolean = @import("elements/boolean.zig");
 const types = @import("elements/types.zig");
+const array = @import("./array.zig");
 
 const native_endian = builtin.cpu.arch.endian();
 
@@ -84,9 +85,10 @@ pub fn Element(comptime T: type) type {
             // At this point, bytes.len is zero when:
             // 1. len is zero, or
             // 2. @sizeOf(T) is zero (though this should not happen for valid numpy types)
-            // Either case, we can return an empty slice
+            // Either case, we can return an empty slice. But that empty slice needs to be properly aligned,
+            // otherwise Zig just attaches an undefined pointer to the slice which may be misaligned.
             if (bytes.len == 0) {
-                return &[_]T{};
+                return array.danglingPtr(T)[0..0];
             }
 
             // Now bytes is non-empty, len is non-zero, and @sizeOf(T) is non-zero

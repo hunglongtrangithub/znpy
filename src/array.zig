@@ -40,6 +40,28 @@ pub fn ptrFromOffset(comptime T: type, base_ptr: anytype, offset: isize) switch 
     return @ptrFromInt(target_addr);
 }
 
+/// Returns a non-null, properly aligned, but "dangling" pointer for a given type.
+///
+/// **When to use this:**
+/// 1. To initialize an `ArrayView` that has a size of 0 in one or more dimensions.
+/// 2. As a sentinel value for empty allocations to avoid using `undefined` or `null`.
+/// 3. When you need to satisfy Zig's requirement that a `[*]T` must be aligned to `@alignOf(T)`.
+///
+/// **Why this address?**
+/// We use the type's alignment as its address (e.g., `0x4` for `u32`). This is:
+/// - **Aligned:** By definition, the value `@alignOf(T)` is divisible by `@alignOf(T)`.
+/// - **Non-Null:** Zig pointers cannot be `0`. Since alignment is always >= 1, this is safe.
+/// - **Crash-Fast:** If your code accidentally tries to dereference this pointer,
+///   the OS will immediately trigger a segfault because the address is in protected memory.
+///
+/// **Security Note:** This pointer must NEVER be dereferenced. It is a metadata
+/// placeholder only.
+pub fn danglingPtr(comptime T: type) [*]T {
+    // We cast the alignment value (a power of 2) into the pointer type.
+    // This is the idiomatic Zig equivalent to Rust's NonNull::dangling().
+    return @ptrFromInt(@alignOf(T));
+}
+
 test {
     _ = dynamic;
     _ = static;

@@ -672,8 +672,7 @@ test "slicing tests - working cases" {
 
     // Test 15: Empty array
     {
-        const storage: [2]u32 = undefined;
-        const empty_data: []u32 = storage[0..0];
+        const empty_data: []u32 = array_mod.danglingPtr(u32)[0..0];
         const empty_dims = [_]usize{ 0, 1, 2 };
         const empty_strides = [_]isize{ 0, 0, 0 };
         const empty_view = ArrayView(u32){
