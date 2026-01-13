@@ -80,19 +80,19 @@ pub fn Formatter(comptime T: type) type {
 
         /// Internal recursive function to print the array view
         fn printArrayInner(self: *Self, array_view: *const ConstArrayView(T)) std.io.Writer.Error!void {
+            const current_rank = array_view.dims.len;
+
             // Check if array is empty
             if (std.mem.indexOfScalar(usize, array_view.dims, 0) != null) {
                 // Just print [[...]]
-                for (0..self.total_array_rank) |_| {
+                for (0..current_rank) |_| {
                     try self.writer.writeAll("[");
                 }
-                for (0..self.total_array_rank) |_| {
+                for (0..current_rank) |_| {
                     try self.writer.writeAll("]");
                 }
                 return;
             }
-
-            const current_rank = array_view.dims.len;
 
             switch (current_rank) {
                 0 => {
