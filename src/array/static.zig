@@ -257,7 +257,7 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
-        pub fn format(self: *const Self, writer: std.io.Writer) std.io.Writer.Error!void {
+        pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
             const view = self.asView();
             try view.format(writer);
         }

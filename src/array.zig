@@ -1,4 +1,6 @@
 //! Module for array types: static-ranked vs dynamic-ranked arrays holding mutable vs immutable data.
+//! Static array types have their rank (number of dimensions) known at compile time, and thus some
+//! allocations can be avoided, and offset calculation loop can be unrolled by the compiler.
 //!
 //! This module provides multidimensional arrays with support for:
 //! - **Ownership**: Arrays own their data, views reference existing data

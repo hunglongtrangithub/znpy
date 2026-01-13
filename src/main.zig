@@ -16,7 +16,7 @@ pub fn main() !void {
     const allocator = fallback.get();
 
     const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
-        try stdout.print("Failed to open file: {}\n", .{e});
+        std.debug.print("Failed to open file: {}\n", .{e});
         return;
     };
     defer file.close();
@@ -24,11 +24,11 @@ pub fn main() !void {
     // Get file size
     const file_stat = try file.stat();
     const read_size = std.math.cast(usize, file_stat.size) orelse {
-        try stdout.print("File size is too large to map\n", .{});
+        std.debug.print("File size is too large to map\n", .{});
         return;
     };
     if (read_size == 0) {
-        try stdout.print("File is empty, nothing to read\n", .{});
+        std.debug.print("File is empty, nothing to read\n", .{});
         return;
     }
 
@@ -43,37 +43,41 @@ pub fn main() !void {
     );
     defer std.posix.munmap(file_buffer);
     try stdout.print("Mapped file size: {}\n", .{read_size});
+    if (file_buffer.len != read_size) {
+        std.debug.print("Mapped size does not match file size.\n", .{});
+        return;
+    }
+
     try stdout.flush();
 
     // Use a const array since the mmap buffer cannot be mutated
-    const ConstArray = znpy.array.ConstDynamicArray(f32);
+    const ConstArray = znpy.array.ConstStaticArray(f32, 2);
 
     const array: ConstArray = ConstArray.fromFileBuffer(file_buffer, allocator) catch |e| {
-        try stdout.print("Failed to create ArrayView from file buffer: {}\n", .{e});
-        try stdout.flush();
+        std.debug.print("Failed to create ArrayView from file buffer: {}\n", .{e});
         return;
     };
 
+    try stdout.print("Formatted array:\n{f}\n", .{array});
     try stdout.print("Array shape: {any}\n", .{array.shape.dims});
     try stdout.print("Number of elements: {any}\n", .{array.data_buffer.len});
     try stdout.print("Array's start address: {any}\n", .{array.data_buffer.ptr});
+    try stdout.print("Array's memory order: {any}\n", .{array.shape.order});
     try stdout.flush();
 
-    // try stdout.print("Getting slice array_view[:]\n", .{});
-    // const array_view = try array.slice(
-    //     &znpy.s(.{ .{}, .{}, .{} }),
-    //     allocator,
-    // );
-    // defer array_view.deinit(allocator);
+    try stdout.print("Getting slice array[1, :]\n", .{});
+    const array_view = try array.slice(
+        &znpy.s(.{ 1, .{} }),
+        allocator,
+    );
+    defer array_view.deinit(allocator);
 
-    // try stdout.print("Sliced Array shape: {any}\n", .{array_view.dims});
-    // std.debug.assert(array_view.dims.len == 1 and array_view.dims[0] == 5);
-    //
-    // // Get array view in slice
-    // const slice: []const f32 = array_view.data_ptr[0..array_view.dims[0]];
-    // try stdout.print("Sliced data: {any}\n", .{slice});
+    try stdout.print("Sliced array shape: {any}\n", .{array_view.dims});
+    std.debug.assert(array_view.dims.len == 1 and array_view.dims[0] == 5);
 
-    try stdout.print("Formatted Array:\n{f}\n", .{array});
+    // Get array view in slice
+    const slice: []const f32 = array_view.data_ptr[0..array_view.dims[0]];
+    try stdout.print("Sliced data: {any}\n", .{slice});
     try stdout.flush();
     return;
 }
