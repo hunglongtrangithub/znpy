@@ -19,7 +19,7 @@ In my recent project that involves working with large vector datasets, our old c
 
 Make sure [Zig](https://ziglang.org/download/) is installed.
 
-Run the main executable:
+Run the main executable for demo:
 
 ```sh
 zig build run

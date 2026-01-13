@@ -65,19 +65,22 @@ pub fn main() !void {
     try stdout.print("Array's memory order: {any}\n", .{array.shape.order});
     try stdout.flush();
 
-    try stdout.print("Getting slice array[1, :]\n", .{});
+    try stdout.print("Getting slice array[:, 0]:\n", .{});
     const array_view = try array.slice(
-        &znpy.s(.{ 1, .{} }),
+        &znpy.s(.{ .{}, 1 }),
         allocator,
     );
     defer array_view.deinit(allocator);
 
-    try stdout.print("Sliced array shape: {any}\n", .{array_view.dims});
-    std.debug.assert(array_view.dims.len == 1 and array_view.dims[0] == 5);
+    try stdout.print("Sliced array view:\n{f}\n", .{array_view});
+    try stdout.print("Sliced array view shape: {any}\n", .{array_view.dims});
+    try stdout.print("Sliced array view strides: {any}\n", .{array_view.strides});
+    try stdout.print("Sliced array view data ptr: {any}\n", .{array_view.data_ptr});
+    std.debug.assert(array_view.dims.len == 1 and array_view.dims[0] == 4);
 
     // Get array view in slice
     const slice: []const f32 = array_view.data_ptr[0..array_view.dims[0]];
-    try stdout.print("Sliced data: {any}\n", .{slice});
+    try stdout.print("Array view in Zig slice: {any}\n", .{slice});
     try stdout.flush();
     return;
 }
