@@ -58,7 +58,18 @@ pub fn Element(comptime T: type) type {
                     }
                 },
                 .Int8, .UInt8 => {},
-                .Int16, .Int32, .Int64, .UInt16, .UInt32, .UInt64, .Float32, .Float64, .Float128, .Complex64, .Complex128 => |endian| {
+                .Int16,
+                .Int32,
+                .Int64,
+                .UInt16,
+                .UInt32,
+                .UInt64,
+                .Float32,
+                .Float64,
+                .Float128,
+                .Complex64,
+                .Complex128,
+                => |endian| {
                     // Endianness must match native endianness for multi-byte types
                     if (endian) |e| {
                         if (e != native_endian) {

@@ -13,3 +13,6 @@ wheels/
 zig-out/
 .zig-cache/
 test-data/
+
+# MacOS files
+.DS_Store

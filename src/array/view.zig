@@ -2,6 +2,7 @@ const std = @import("std");
 
 const array_mod = @import("../array.zig");
 const slice_mod = @import("../slice.zig");
+const format_mod = @import("./format.zig");
 
 /// Compute the flat array offset for a given multi-dimensional index.
 /// Returns:
@@ -176,6 +177,28 @@ pub fn ArrayView(comptime T: type) type {
         pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
             allocator.free(self.dims);
             allocator.free(self.strides);
+        }
+
+        /// Return a ConstArrayView version of this ArrayView.
+        pub fn asConst(self: *const Self) ConstArrayView(T) {
+            return ConstArrayView(T){
+                .dims = self.dims,
+                .strides = self.strides,
+                // Zig should allow implicit cast from [*]T to [*]const T
+                .data_ptr = self.data_ptr,
+            };
+        }
+
+        /// Format the array view using the default formatter.
+        /// Intended to be used with `std.io.Writer.print`:
+        /// ```zig
+        /// var stdout_buffer: [1024]u8 = undefined;
+        /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        /// const stdout = &stdout_writer.interface;
+        /// try stdout.print("Array:\n{f}\n", .{array});
+        pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+            const const_view = self.asConst();
+            try format_mod.Formatter(T).print(const_view, writer);
         }
     };
 }
@@ -588,6 +611,17 @@ pub fn ConstArrayView(comptime T: type) type {
         pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
             allocator.free(self.dims);
             allocator.free(self.strides);
+        }
+
+        /// Format the array view using the default formatter.
+        /// Intended to be used with `std.io.Writer.print`:
+        /// ```zig
+        /// var stdout_buffer: [1024]u8 = undefined;
+        /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        /// const stdout = &stdout_writer.interface;
+        /// try stdout.print("Array:\n{f}\n", .{array});
+        pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+            try format_mod.Formatter(T).print(self, writer);
         }
     };
 }
