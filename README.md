@@ -1,6 +1,6 @@
 # Znpy
 
-`znpy` provides [Npy](https://numpy.org/doc/stable/reference/generated/numpy.lib.format.html) file reader and writer in Zig.
+`znpy` provides [Npy](https://numpy.org/doc/stable/reference/generated/numpy.lib.format.html) file reading implementation in Zig.
 
 Note: Right now I have supported reading npy files for my other work, but writing npy files is the next priority.
 
