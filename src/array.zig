@@ -32,6 +32,7 @@ const std = @import("std");
 const dynamic = @import("array/dynamic.zig");
 const static = @import("array/static.zig");
 const view = @import("array/view.zig");
+const format = @import("array/format.zig");
 
 pub const ArrayView = view.ArrayView;
 pub const ConstArrayView = view.ConstArrayView;
@@ -94,6 +95,7 @@ test {
     _ = dynamic;
     _ = static;
     _ = view;
+    _ = format;
 }
 
 test "ptrFromOffset - positive stride" {
