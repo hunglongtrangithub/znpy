@@ -18,9 +18,7 @@ pub const DynamicShape = struct {
 
     const Self = @This();
 
-    pub const FromHeaderError = error{ShapeSizeOverflow};
-
-    pub const InitError = error{ShapeSizeOverflow} || std.mem.Allocator.Error;
+    pub const Error = error{ShapeSizeOverflow} || std.mem.Allocator.Error;
 
     /// Initialize a `DynamicShape` instance, with shape size overflow check and strides computation.
     pub fn init(
@@ -28,10 +26,10 @@ pub const DynamicShape = struct {
         order: shape_mod.Order,
         descr: elements_mod.ElementType,
         allocator: std.mem.Allocator,
-    ) InitError!Self {
+    ) Error!Self {
         // Check that the shape length fits in isize
         const num_elements = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
-            return InitError.ShapeSizeOverflow;
+            return Error.ShapeSizeOverflow;
         };
         const strides = try computeStrides(dims, order, allocator);
 
@@ -48,7 +46,7 @@ pub const DynamicShape = struct {
     /// Create a `DynamicShape` from a numpy header.
     /// Returns an error if the shape's total size in bytes overflows isize.
     /// Allocates memory for strides using the provided allocator.
-    pub fn fromHeader(npy_header: header_mod.Header, allocator: std.mem.Allocator) (FromHeaderError || std.mem.Allocator.Error)!Self {
+    pub fn fromHeader(npy_header: header_mod.Header, allocator: std.mem.Allocator) Error!Self {
         // Extract shape
         const dims = npy_header.shape;
 

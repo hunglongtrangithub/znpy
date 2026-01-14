@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const array_mod = @import("../array.zig");
+const pointer_mod = @import("../pointer.zig");
 const slice_mod = @import("../slice.zig");
 const format_mod = @import("./format.zig");
 
@@ -114,7 +114,7 @@ pub fn ArrayView(comptime T: type) type {
                 self.strides,
                 index,
             ) orelse return null;
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return pointer_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
 
         /// Get a pointer to the element at the given multi-dimensional index without bounds checking.
@@ -126,7 +126,7 @@ pub fn ArrayView(comptime T: type) type {
         /// Use only when you have already validated the indices.
         pub fn atUnchecked(self: *const Self, index: []const usize) *T {
             const offset = strideOffsetUnchecked(self.strides, index);
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return pointer_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
 
         /// Get the element at the given multi-dimensional index.
@@ -160,7 +160,7 @@ pub fn ArrayView(comptime T: type) type {
             );
 
             // Calculate new data pointer
-            const new_data_ptr_single = array_mod.ptrFromOffset(
+            const new_data_ptr_single = pointer_mod.ptrFromOffset(
                 T,
                 self.data_ptr,
                 offset,
@@ -198,7 +198,7 @@ pub fn ArrayView(comptime T: type) type {
         /// try stdout.print("Array:\n{f}\n", .{array});
         pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
             const const_view = self.asConst();
-            try format_mod.Formatter(T).print(const_view, writer);
+            try format_mod.Formatter(T).print(&const_view, writer);
         }
     };
 }
@@ -555,7 +555,7 @@ pub fn ConstArrayView(comptime T: type) type {
                 self.strides,
                 index,
             ) orelse return null;
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return pointer_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
 
         /// Get a const pointer to the element at the given multi-dimensional index without bounds checking.
@@ -567,7 +567,7 @@ pub fn ConstArrayView(comptime T: type) type {
         /// Use only when you have already validated the indices.
         pub fn atUnchecked(self: *const Self, index: []const usize) *const T {
             const offset = strideOffsetUnchecked(self.strides, index);
-            return array_mod.ptrFromOffset(T, self.data_ptr, offset);
+            return pointer_mod.ptrFromOffset(T, self.data_ptr, offset);
         }
 
         /// Get the element at the given multi-dimensional index.
@@ -594,7 +594,7 @@ pub fn ConstArrayView(comptime T: type) type {
             );
 
             // Calculate new data pointer
-            const new_data_ptr_single = array_mod.ptrFromOffset(
+            const new_data_ptr_single = pointer_mod.ptrFromOffset(
                 T,
                 self.data_ptr,
                 offset,

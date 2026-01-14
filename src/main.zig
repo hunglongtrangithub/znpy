@@ -11,6 +11,7 @@ pub fn main() !void {
     const source_dir = comptime dirname(@src().file) orelse "src";
     const npy_file_path = comptime source_dir ++ "/" ++ "../test-data/shapes/f32_2d_4x5.npy";
     try stdout.print("Loading NPY file from path: {s}\n", .{npy_file_path});
+    try stdout.flush();
 
     var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
     const allocator = fallback.get();
@@ -47,8 +48,6 @@ pub fn main() !void {
         std.debug.print("Mapped size does not match file size.\n", .{});
         return;
     }
-
-    try stdout.flush();
 
     // Use a const array since the mmap buffer cannot be mutated
     const ConstArray = znpy.array.ConstStaticArray(f32, 2);

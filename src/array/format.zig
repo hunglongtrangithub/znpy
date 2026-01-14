@@ -4,6 +4,7 @@ const view_mod = @import("./view.zig");
 const slice_mod = @import("../slice.zig");
 const elements_mod = @import("../elements.zig");
 const array_mod = @import("../array.zig");
+const pointer_mod = @import("../pointer.zig");
 
 const ConstArrayView = view_mod.ConstArrayView;
 
@@ -199,7 +200,7 @@ pub fn Formatter(comptime T: type) type {
             // Manually create a sub-array view to avoid allocations
             const new_dims = array_view.dims[1..];
             const new_strides = array_view.strides[1..];
-            const new_data_ptr_single = array_mod.ptrFromOffset(
+            const new_data_ptr_single = pointer_mod.ptrFromOffset(
                 T,
                 array_view.data_ptr,
                 // elem_idx is guaranteed to be less than dim size, which means less than isize max

@@ -6,6 +6,47 @@ const elements_mod = @import("../elements.zig");
 const array_mod = @import("../array.zig");
 const view_mod = @import("./view.zig");
 const slice_mod = @import("../slice.zig");
+const pointer_mod = @import("../pointer.zig");
+
+pub const FromFileBufferError = elements_mod.ReadHeaderError || shape_mod.DynamicShape.Error || elements_mod.ViewDataError;
+
+/// Generic function to create either a `StaticArray` or `ConstStaticArray` from a numpy file buffer,
+/// depending on the mutability of the input buffer.
+fn arrayFromFileBuffer(
+    comptime T: type,
+    file_buffer: anytype,
+    allocator: std.mem.Allocator,
+) FromFileBufferError!if (pointer_mod.isConstPtr(@TypeOf(file_buffer)))
+    DynamicArray(T)
+else
+    DynamicArray(T) {
+    var slice_reader = header_mod.SliceReader.init(file_buffer);
+
+    const header = try header_mod.Header.fromSliceReader(&slice_reader, allocator);
+    // We can defer here since the shape will hold its own copy of the dims slice it its struct
+    defer header.deinit(allocator);
+
+    const byte_buffer = file_buffer[slice_reader.pos..];
+    const shape = try shape_mod.DynamicArray.fromHeader(header);
+
+    const data_buffer = try elements_mod.Element(T).bytesAsSlice(
+        byte_buffer,
+        shape.num_elements,
+        header.descr,
+    );
+
+    if (comptime pointer_mod.isConstPtr(@TypeOf(file_buffer))) {
+        return ConstDynamicArray(T){
+            .shape = shape,
+            .data_buffer = data_buffer,
+        };
+    } else {
+        return DynamicArray(T){
+            .shape = shape,
+            .data_buffer = data_buffer,
+        };
+    }
+}
 
 /// A multi-dimensional array with dynamic rank that owns its data.
 /// This array owns the data buffer and will free it on deinit.
@@ -21,8 +62,6 @@ pub fn DynamicArray(comptime T: type) type {
         data_buffer: []T,
 
         const Self = @This();
-
-        pub const FromFileBufferError = elements_mod.ReadHeaderError || shape_mod.DynamicShape.FromHeaderError || elements_mod.ViewDataError;
 
         pub const InitError = shape_mod.DynamicShape.InitError || std.mem.AllocError;
 
@@ -58,25 +97,7 @@ pub fn DynamicArray(comptime T: type) type {
         /// Create a `DynamicArrayView` from a numpy file buffer.
         /// The buffer must contain a valid numpy array file.
         pub fn fromFileBuffer(file_buffer: []u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
-            var slice_reader = header_mod.SliceReader.init(file_buffer);
-
-            // We don't need to defer header.deinit here since we need header.shape (allocated by the allocator) to be stored in the Array struct
-            const header = try header_mod.Header.fromSliceReader(&slice_reader, allocator);
-            errdefer header.deinit(allocator);
-
-            const byte_buffer = file_buffer[slice_reader.pos..];
-            const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
-
-            const data_buffer = try elements_mod.Element(T).bytesAsSlice(
-                byte_buffer,
-                shape.num_elements,
-                header.descr,
-            );
-
-            return Self{
-                .shape = shape,
-                .data_buffer = data_buffer,
-            };
+            return arrayFromFileBuffer(T, file_buffer, allocator);
         }
 
         /// Create a view of this array.
@@ -167,30 +188,10 @@ pub fn ConstDynamicArray(comptime T: type) type {
 
         const Self = @This();
 
-        pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.DynamicShape.FromHeaderError || elements_mod.ViewDataError;
-
         /// Create a `DynamicArrayView` from a numpy file buffer.
         /// The buffer must contain a valid numpy array file.
         pub fn fromFileBuffer(file_buffer: []const u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
-            var slice_reader = header_mod.SliceReader.init(file_buffer);
-
-            // We don't need to defer header.deinit here since we need header.shape (allocated by the allocator) to be stored in the Array struct
-            const header = try header_mod.Header.fromSliceReader(&slice_reader, allocator);
-            errdefer header.deinit(allocator);
-
-            const byte_buffer = file_buffer[slice_reader.pos..];
-            const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
-
-            const data_buffer = try elements_mod.Element(T).bytesAsSlice(
-                byte_buffer,
-                shape.num_elements,
-                header.descr,
-            );
-
-            return Self{
-                .shape = shape,
-                .data_buffer = data_buffer,
-            };
+            return arrayFromFileBuffer(T, file_buffer, allocator);
         }
 
         /// Deallocate the array by deallocating the shape data

@@ -2,8 +2,8 @@ const std = @import("std");
 
 const header = @import("header.zig");
 const elements = @import("elements.zig");
-const dynamic = @import("shape/dynamic.zig");
-const static = @import("shape/static.zig");
+pub const dynamic = @import("shape/dynamic.zig");
+pub const static = @import("shape/static.zig");
 
 pub const DynamicShape = dynamic.DynamicShape;
 pub const StaticShape = static.StaticShape;

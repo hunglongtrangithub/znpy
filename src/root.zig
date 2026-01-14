@@ -1,6 +1,8 @@
 //! By convention, root.zig is the root source file when making a library.
 const std = @import("std");
 
+const pointer = @import("pointer.zig");
+
 pub const header = @import("header.zig");
 pub const elements = @import("elements.zig");
 pub const shape = @import("shape.zig");
@@ -14,6 +16,7 @@ pub const Slice = slice.Slice;
 pub const s = slice.format_slice;
 
 test {
+    _ = pointer;
     _ = header;
     _ = elements;
     _ = shape;

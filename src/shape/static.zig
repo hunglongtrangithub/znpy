@@ -4,6 +4,13 @@ const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 
+pub const FromHeaderError = error{
+    ShapeSizeOverflow,
+    DimensionMismatch,
+};
+
+pub const InitError = error{ShapeSizeOverflow};
+
 pub fn StaticShape(comptime rank: usize) type {
     // TODO: consider adding a check to reject ranks that are too large?
     return struct {
@@ -19,13 +26,6 @@ pub fn StaticShape(comptime rank: usize) type {
         order: shape_mod.Order,
 
         const Self = @This();
-
-        pub const FromHeaderError = error{
-            ShapeSizeOverflow,
-            DimensionMismatch,
-        };
-
-        pub const InitError = error{ShapeSizeOverflow};
 
         /// Initialize a `StaticShape` instance, with shape size overflow check and strides computation.
         pub fn init(

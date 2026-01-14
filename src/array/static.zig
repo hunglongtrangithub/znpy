@@ -6,6 +6,48 @@ const elements_mod = @import("../elements.zig");
 const array_mod = @import("../array.zig");
 const view_mod = @import("./view.zig");
 const slice_mod = @import("../slice.zig");
+const pointer_mod = @import("../pointer.zig");
+
+pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.static.FromHeaderError || elements_mod.ViewDataError;
+
+/// Generic function to create either a `StaticArray` or `ConstStaticArray` from a numpy file buffer,
+/// depending on the mutability of the input buffer.
+fn arrayFromFileBuffer(
+    comptime T: type,
+    comptime rank: usize,
+    file_buffer: anytype,
+    allocator: std.mem.Allocator,
+) FromFileBufferError!if (pointer_mod.isConstPtr(@TypeOf(file_buffer)))
+    ConstStaticArray(T, rank)
+else
+    StaticArray(T, rank) {
+    var slice_reader = header_mod.SliceReader.init(file_buffer);
+
+    const header = try header_mod.Header.fromSliceReader(&slice_reader, allocator);
+    // We can defer here since the shape will hold its own copy of the dims slice it its struct
+    defer header.deinit(allocator);
+
+    const byte_buffer = file_buffer[slice_reader.pos..];
+    const shape = try shape_mod.StaticShape(rank).fromHeader(header);
+
+    const data_buffer = try elements_mod.Element(T).bytesAsSlice(
+        byte_buffer,
+        shape.num_elements,
+        header.descr,
+    );
+
+    if (comptime pointer_mod.isConstPtr(@TypeOf(file_buffer))) {
+        return ConstStaticArray(T, rank){
+            .shape = shape,
+            .data_buffer = data_buffer,
+        };
+    } else {
+        return StaticArray(T, rank){
+            .shape = shape,
+            .data_buffer = data_buffer,
+        };
+    }
+}
 
 /// A multi-dimensional array with static rank.
 /// The view does not own the underlying data buffer.
@@ -24,8 +66,6 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         data_buffer: []T,
 
         const Self = @This();
-
-        pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.StaticShape(rank).FromHeaderError || elements_mod.ViewDataError;
 
         pub const InitError = shape_mod.StaticShape(rank).InitError || std.mem.Allocator.Error;
 
@@ -56,28 +96,10 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
             allocator.free(self.data_buffer);
         }
 
-        /// Create a `StaticArrayView` from a numpy file buffer.
+        /// Create a `ArrayView` from a numpy file buffer.
         /// The buffer must contain a valid numpy array file.
         pub fn fromFileBuffer(file_buffer: []u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
-            var slice_reader = header_mod.SliceReader.init(file_buffer);
-
-            // We don't need to defer header.deinit here since we need header.shape to be stored in the Array struct
-            const header = try header_mod.Header.fromSliceReader(&slice_reader, allocator);
-            errdefer header.deinit(allocator);
-
-            const byte_buffer = file_buffer[slice_reader.pos..];
-            const shape = try shape_mod.StaticShape(rank).fromHeader(header);
-
-            const data_buffer = try elements_mod.Element(T).bytesAsSlice(
-                byte_buffer,
-                shape.num_elements,
-                header.descr,
-            );
-
-            return Self{
-                .shape = shape,
-                .data_buffer = data_buffer,
-            };
+            return arrayFromFileBuffer(T, rank, file_buffer, allocator);
         }
 
         /// Create a view of this array.
@@ -147,7 +169,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
-        pub fn format(self: *const Self, writer: std.io.Writer) std.io.Writer.Error!void {
+        pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
             const view = self.asView().asConst();
             try view.format(writer);
         }
@@ -170,30 +192,10 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
 
         const Self = @This();
 
-        pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.StaticShape(rank).FromHeaderError || elements_mod.ViewDataError;
-
-        /// Create a `StaticArrayView` from a numpy file buffer.
+        /// Create a `ConstStaticArrayView` from a numpy file buffer.
         /// The buffer must contain a valid numpy array file.
         pub fn fromFileBuffer(file_buffer: []const u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
-            var slice_reader = header_mod.SliceReader.init(file_buffer);
-
-            // We don't need to defer header.deinit here since we need header.shape to be stored in the Array struct
-            const header = try header_mod.Header.fromSliceReader(&slice_reader, allocator);
-            errdefer header.deinit(allocator);
-
-            const byte_buffer = file_buffer[slice_reader.pos..];
-            const shape = try shape_mod.StaticShape(rank).fromHeader(header);
-
-            const data_buffer = try elements_mod.Element(T).bytesAsSlice(
-                byte_buffer,
-                shape.num_elements,
-                header.descr,
-            );
-
-            return Self{
-                .shape = shape,
-                .data_buffer = data_buffer,
-            };
+            return arrayFromFileBuffer(T, rank, file_buffer, allocator);
         }
 
         /// Create a const view of this array for indexing operations.
