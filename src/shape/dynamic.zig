@@ -152,7 +152,7 @@ test "DynamicShape.fromHeader - overflow error" {
         .order = .C,
     };
     const result = DynamicShape.fromHeader(npy_header, allocator);
-    try std.testing.expectError(DynamicShape.FromHeaderError.ShapeSizeOverflow, result);
+    try std.testing.expectError(DynamicShape.Error.ShapeSizeOverflow, result);
 }
 
 test "DynamicShape.strides - empty shape" {
