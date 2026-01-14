@@ -1,8 +1,6 @@
 # Znpy
 
-`znpy` provides [Npy](https://numpy.org/doc/stable/reference/generated/numpy.lib.format.html) file reading implementation in Zig.
-
-Note: Right now I have supported reading npy files for my other work, but writing npy files is the next priority.
+`znpy` provides [Npy](https://numpy.org/doc/stable/reference/generated/numpy.lib.format.html) file reading and writing implementation in Zig.
 
 ## Why?
 
@@ -19,11 +17,13 @@ In my recent project that involves working with large vector datasets, our old c
 
 Make sure [Zig](https://ziglang.org/download/) is installed.
 
-Run the main executable for demo:
+Run demos:
 
 ```sh
-zig build run
+zig build <demo_name>
 ```
+
+Where `<demo_name>` is the name of a file in `examples/` without the `.zig` extension (e.g., `zig build endian`).
 
 Run tests:
 
