@@ -64,7 +64,7 @@ pub const Range = struct {
     /// Range of normalized indicies for start and end:
     /// - start: `[0, dim_size - 1]`
     /// - end: `[-1, dim_size]`
-    /// Return `null` when step is 0.]
+    /// Return `null` when step is 0.
     /// Return value is a struct of (start, num_elements).
     pub fn normalize(self: Self, dim_size: usize) ?struct { isize, usize } {
         // step must not be zero

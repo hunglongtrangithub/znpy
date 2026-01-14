@@ -16,7 +16,7 @@
 //!
 //! ## View Types (Reference Data)
 //! View types reference existing data without ownership. Views support striding and may
-//! reference non-contiguous data (e.g., slices, transposed views):
+//! reference non-contiguous data (e.g., slices):
 //! - `ArrayView(T)` - Mutable view into array data
 //! - `ConstArrayView(T)` - Read-only view into array data
 //!
@@ -27,8 +27,7 @@
 //!
 //! ## Memory Layout
 //! - **Arrays**: Always store data in a single contiguous buffer
-//! - **Views**: May reference non-contiguous data via strides, enabling zero-copy slicing
-//!   and transposition
+//! - **Views**: May reference non-contiguous data via strides
 const std = @import("std");
 
 const dynamic = @import("array/dynamic.zig");

@@ -5,7 +5,9 @@ const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 
 pub const FromHeaderError = error{
+    /// The total size of the shape overflows isize.
     ShapeSizeOverflow,
+    /// The number of dimensions in the header does not match the expected rank.
     DimensionMismatch,
 };
 
@@ -38,6 +40,9 @@ pub fn StaticShape(comptime rank: usize) type {
                 return InitError.ShapeSizeOverflow;
             };
             const strides = computeStrides(dims, order);
+
+            std.debug.assert(strides.len == rank);
+
             return Self{
                 .dims = dims,
                 .order = order,
@@ -47,6 +52,7 @@ pub fn StaticShape(comptime rank: usize) type {
         }
 
         /// Create a `StaticShape` from a numpy header.
+        /// Does not own the header's shape data.
         /// Returns an error if the shape's total size in bytes overflows isize,
         /// or if the number of dimensions does not match the expected rank.
         pub fn fromHeader(header: header_mod.Header) FromHeaderError!Self {

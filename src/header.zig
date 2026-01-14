@@ -148,7 +148,7 @@ pub const Header = struct {
 
     /// Reads and parses the header from a slice reader (`SliceReader`).
     /// Returns the parsed header and advances the slice reader position.
-    /// This function uses the slice reader to avoid unnecessary copies, unlike `fromReader`.
+    /// This function uses the slice reader to avoid unnecessary copies, unlike `Header.fromReader`.
     pub fn fromSliceReader(slice_reader: *SliceReader, allocator: std.mem.Allocator) ReadHeaderError!Self {
         const eight_bytes = slice_reader.readBytes(8) catch {
             return ParseHeaderError.IoError;
@@ -275,7 +275,6 @@ pub const Header = struct {
     }
 
     /// Parses the given string buffer info a Header struct.
-    /// The string buffer is expected to be in the format of a Python dictionary.
     pub fn fromPythonString(
         header_buffer: []const u8,
         header_encoding: HeaderEncoding,

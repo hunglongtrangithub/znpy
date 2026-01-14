@@ -129,8 +129,8 @@ fn expandEllipsis(
 /// Calculate the new dims and strides arrays based on the given slices.
 /// `dims` and `strides` are the original array's dimensions and strides,
 /// and must have the same length.
-/// The values in `dims` and `strides` MUST correspond to ones of a
-/// non-empty array (i.e., no dimension is zero).
+/// When `dims` has at least one dimension of size 0, the strides are expected
+/// to be all zeros as well.
 /// Return the new dims and strides arrays along with the offset to the
 ///  first element of the sliced view: `.{ new_dims, new_strides, offset }`.
 /// The caller owns the returned view's dims and strides arrays.

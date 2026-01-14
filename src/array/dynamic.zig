@@ -20,7 +20,7 @@ fn arrayFromFileBuffer(
     file_buffer: anytype,
     allocator: std.mem.Allocator,
 ) FromFileBufferError!if (pointer_mod.isConstPtr(@TypeOf(file_buffer)))
-    DynamicArray(T)
+    ConstDynamicArray(T)
 else
     DynamicArray(T) {
     var slice_reader = header_mod.SliceReader.init(file_buffer);
@@ -97,14 +97,24 @@ pub fn DynamicArray(comptime T: type) type {
             self.shape.deinit(allocator);
         }
 
-        /// Create a `DynamicArrayView` from a numpy file buffer.
-        /// The buffer must contain a valid numpy array file.
+        /// Free only the shape metadata, not the data buffer.
+        /// Use this for arrays created with `fromFileBuffer`
+        /// where the buffer is externally managed.
+        pub fn deinitMetadata(self: Self, allocator: std.mem.Allocator) void {
+            self.shape.deinit(allocator);
+        }
+
+        /// Create a `DynamicArray` from a numpy file buffer.
+        /// The returned array borrows the buffer's data; no copy is made.
+        /// Do not use `deinit` on the returned array, as it does not own the buffer,
+        /// but make sure to call `deinitMetadata` to free the shape when done.
         pub fn fromFileBuffer(file_buffer: []u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
             return arrayFromFileBuffer(T, file_buffer, allocator);
         }
 
         pub fn fromFileAlloc(file_reader: *std.io.Reader, allocator: std.mem.Allocator) FromFileBufferError!Self {
             const header = try header_mod.Header.fromReader(file_reader, allocator);
+            // header's dims are owned by shape, so no need to defer deinit here
             const shape = try shape_mod.DynamicShape.fromHeader(header);
 
             // Allocate the data buffer and read data from the file

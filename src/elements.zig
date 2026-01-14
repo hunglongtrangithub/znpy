@@ -157,7 +157,7 @@ pub fn Element(comptime T: type) type {
             validateTypeCompatibility(bytes, type_descr) catch |e| {
                 switch (e) {
                     TypeCompatibilityError.EndiannessMismatch => {
-                        // Perform byte swap
+                        // Perform byte swap. Should work on Complex types as well
                         std.mem.byteSwapAllElements(T, slice);
                     },
                     else => return e,

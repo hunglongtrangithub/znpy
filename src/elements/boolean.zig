@@ -3,7 +3,7 @@ const std = @import("std");
 /// Checks if every byte in the given slice is either 0 or 1 using SIMD operations for efficiency.
 pub fn isAllZeroOrOne(bytes: []const u8) bool {
     const vector_size = std.simd.suggestVectorLength(u8) orelse {
-        // Check without SIMD if not supported
+        // Check without SIMD if scalars are recommended
         for (bytes) |b| {
             if (b > 1) {
                 return false;

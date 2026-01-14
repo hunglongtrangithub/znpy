@@ -112,6 +112,7 @@ pub fn Formatter(comptime T: type) type {
                     try self.writer.writeAll("]");
                 },
                 else => {
+                    // Multi-dimensional case
                     try self.writer.writeAll("[");
                     const limit = self.fmt_cfg.collapseLimit(self.total_array_rank - self.current_depth - 1);
                     self.current_depth += 1;
@@ -127,7 +128,7 @@ pub fn Formatter(comptime T: type) type {
             }
         }
 
-        /// Print a single scalar element
+        /// Print a single scalar element, with customized formatting based on its type
         fn printScalar(
             self: *Self,
             scalar: T,

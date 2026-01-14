@@ -100,14 +100,16 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
             allocator.free(self.data_buffer);
         }
 
-        /// Create a `ArrayView` from a numpy file buffer.
-        /// The buffer must contain a valid numpy array file.
+        /// Create a `StaticArray` from a numpy file buffer.
+        /// The returned array borrows the buffer's data; no copy is made.
+        /// Do not use `deinit` on the returned array, as it does not own the buffer.
         pub fn fromFileBuffer(file_buffer: []u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
             return arrayFromFileBuffer(T, rank, file_buffer, allocator);
         }
 
         pub fn fromFileAlloc(file_reader: *std.io.Reader, allocator: std.mem.Allocator) FromFileReaderError!Self {
             const header = try header_mod.Header.fromReader(file_reader, allocator);
+            defer header.deinit(allocator);
             const shape = try shape_mod.StaticShape(rank).fromHeader(header);
 
             // Allocate the data buffer and read data from the file
