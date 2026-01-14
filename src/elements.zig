@@ -33,9 +33,9 @@ pub const DataLayoutError = error{
 
 pub const ViewDataError = TypeCompatibilityError || DataLayoutError;
 
-const WriteDataError = error{};
+pub const ReadDataError = TypeCompatibilityError || std.io.Reader.Error;
 
-const ReadDataError = TypeCompatibilityError || std.io.Reader.Error;
+const WriteDataError = error{};
 
 /// A generic element type representing a single element of type `T` in a numpy array.
 pub fn Element(comptime T: type) type {
@@ -165,10 +165,7 @@ pub fn Element(comptime T: type) type {
                 switch (e) {
                     TypeCompatibilityError.EndiannessMismatch => {
                         // Perform byte swap
-                        for (slice) |*elem| {
-                            // Use this so that it works on Complex types as well
-                            std.mem.byteSwapAllFields(T, elem);
-                        }
+                        std.mem.byteSwapAllElements(T, slice);
                     },
                     else => return e,
                 }

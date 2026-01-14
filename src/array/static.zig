@@ -9,6 +9,7 @@ const slice_mod = @import("../slice.zig");
 const pointer_mod = @import("../pointer.zig");
 
 pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.static.FromHeaderError || elements_mod.ViewDataError;
+pub const FromFileReaderError = header_mod.ReadHeaderError || shape_mod.static.FromHeaderError || elements_mod.ReadDataError;
 
 /// Generic function to create either a `StaticArray` or `ConstStaticArray` from a numpy file buffer,
 /// depending on the mutability of the input buffer.
@@ -100,6 +101,25 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         /// The buffer must contain a valid numpy array file.
         pub fn fromFileBuffer(file_buffer: []u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
             return arrayFromFileBuffer(T, rank, file_buffer, allocator);
+        }
+
+        pub fn fromFileAlloc(file_reader: *std.io.Reader, allocator: std.mem.Allocator) FromFileReaderError!Self {
+            const header = try header_mod.Header.fromReader(file_reader, allocator);
+            const shape = try shape_mod.StaticShape(rank).fromHeader(header);
+
+            // Allocate the data buffer and read data from the file
+            const data_buffer = try allocator.alloc(T, shape.num_elements);
+            errdefer allocator.free(data_buffer);
+            try elements_mod.Element(T).readSlice(
+                data_buffer,
+                file_reader,
+                header.descr,
+            );
+
+            return Self{
+                .shape = shape,
+                .data_buffer = data_buffer,
+            };
         }
 
         /// Create a view of this array.

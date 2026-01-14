@@ -100,6 +100,25 @@ pub fn DynamicArray(comptime T: type) type {
             return arrayFromFileBuffer(T, file_buffer, allocator);
         }
 
+        pub fn fromFileAlloc(file_reader: *std.io.Reader, allocator: std.mem.Allocator) FromFileBufferError!Self {
+            const header = try header_mod.Header.fromReader(file_reader, allocator);
+            const shape = try shape_mod.DynamicShape.fromHeader(header);
+
+            // Allocate the data buffer and read data from the file
+            const data_buffer = try allocator.alloc(T, shape.num_elements);
+            errdefer allocator.free(data_buffer);
+            try elements_mod.Element(T).readSlice(
+                data_buffer,
+                file_reader,
+                header.descr,
+            );
+
+            return Self{
+                .shape = shape,
+                .data_buffer = data_buffer,
+            };
+        }
+
         /// Create a view of this array.
         pub fn asView(self: *const Self) view_mod.ArrayView(T) {
             return .{
