@@ -377,6 +377,50 @@ pub const Header = struct {
         return header_str;
     }
 
+    pub fn writeAll(
+        self: *const Self,
+        writer: *std.io.Writer,
+        allocator: std.mem.Allocator,
+    ) !void {
+        const header_string = try self.toPythonString(allocator);
+
+        const min_content_len = header_string.len + 1; // +1 for \n
+
+        // Try v1.0 first
+        var prefix_len: usize = MAGIC.len + 4; // magic + version + header length in 2 bytes
+        var total_aligned = std.mem.alignForward(usize, prefix_len + min_content_len, 64);
+        var header_len = total_aligned - prefix_len;
+
+        // Check if we need v2.0
+        if (header_len > std.math.maxInt(u16)) {
+            prefix_len += 2; // v2.0 uses 4 bytes for length
+            total_aligned = std.mem.alignForward(usize, prefix_len + min_content_len, 64);
+            header_len = total_aligned - prefix_len;
+        }
+
+        // Write magic and version
+        try writer.writeAll(MAGIC);
+        if (header_len <= std.math.maxInt(u16)) {
+            try writer.writeAll(&[_]u8{ 1, 0 }); // version 1.0
+            const header_len_u16 = @as(u16, @intCast(header_len));
+            try writer.writeInt(u16, header_len_u16, .little);
+        } else {
+            try writer.writeAll(&[_]u8{ 2, 0 }); // version 2.0
+            const header_len_u32 = @as(u32, @intCast(header_len));
+            try writer.writeInt(u32, header_len_u32, .little);
+        }
+
+        // Write header string
+        try writer.writeAll(header_string);
+        // Write padding
+        const padding_len = header_len - min_content_len;
+        for (0..padding_len) |_| {
+            try writer.writeByte(' '); // space character
+        }
+        // Write newline
+        try writer.writeByte('\n'); // newline
+    }
+
     pub fn deinit(self: Header, allocator: std.mem.Allocator) void {
         allocator.free(self.shape);
     }

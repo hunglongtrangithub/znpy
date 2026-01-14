@@ -35,8 +35,6 @@ pub const ViewDataError = TypeCompatibilityError || DataLayoutError;
 
 pub const ReadDataError = TypeCompatibilityError || std.io.Reader.Error;
 
-const WriteDataError = error{};
-
 /// A generic element type representing a single element of type `T` in a numpy array.
 pub fn Element(comptime T: type) type {
     const element_type = ElementType.fromZigType(T) catch @compileError("Unsupported type");
@@ -143,11 +141,6 @@ pub fn Element(comptime T: type) type {
                 const aligned_bytes = @as([]align(@alignOf(T)) u8, @alignCast(bytes));
                 return std.mem.bytesAsSlice(T, aligned_bytes);
             }
-        }
-
-        pub fn writeSlice(slice: []const T, writer: std.io.Writer) WriteDataError!void {
-            _ = slice;
-            _ = writer;
         }
 
         /// Reads data from a reader into the provided slice of type `T`.

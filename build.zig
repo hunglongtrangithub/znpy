@@ -1,7 +1,8 @@
 const std = @import("std");
 
-const examples: [3][]const u8 = [_][]const u8{
+const examples: [4][]const u8 = [_][]const u8{
     "endian",
+    "file_io",
     "from_mmap",
     "from_reader",
 };

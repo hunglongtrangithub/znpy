@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
@@ -7,6 +8,8 @@ const array_mod = @import("../array.zig");
 const view_mod = @import("./view.zig");
 const slice_mod = @import("../slice.zig");
 const pointer_mod = @import("../pointer.zig");
+
+const native_endian = builtin.cpu.arch.endian();
 
 pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.static.FromHeaderError || elements_mod.ViewDataError;
 pub const FromFileReaderError = header_mod.ReadHeaderError || shape_mod.static.FromHeaderError || elements_mod.ReadDataError;
@@ -120,6 +123,23 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
                 .shape = shape,
                 .data_buffer = data_buffer,
             };
+        }
+
+        pub fn writeAll(
+            self: *const Self,
+            writer: *std.io.Writer,
+            allocator: std.mem.Allocator,
+        ) (std.io.Writer.Error || std.mem.Allocator.Error)!void {
+            const header = header_mod.Header{
+                // Force specified endianness to arch's native endian
+                .descr = element_type.withEndian(native_endian),
+                .order = self.shape.order,
+                .shape = &self.shape.dims,
+            };
+            // Write header
+            try header.writeAll(writer, allocator);
+            // Write data buffer
+            try writer.writeAll(std.mem.sliceAsBytes(self.data_buffer));
         }
 
         /// Create a view of this array.

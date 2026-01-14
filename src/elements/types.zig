@@ -73,6 +73,27 @@ pub const ElementType = union(enum) {
         };
     }
 
+    /// Return the same ElementType but with the specified endianness.
+    /// For types without endianness (e.g. Bool/Byte), nothing is changed.
+    pub fn withEndian(self: Self, endian: std.builtin.Endian) Self {
+        // Inject native endian into the element type
+        return switch (self) {
+            inline .Int16,
+            .Int32,
+            .Int64,
+            .UInt16,
+            .UInt32,
+            .UInt64,
+            .Float32,
+            .Float64,
+            .Float128,
+            .Complex64,
+            .Complex128,
+            => |_, tag| @unionInit(Self, @tagName(tag), endian),
+            else => self,
+        };
+    }
+
     /// Converts the ElementType to the corresponding Zig type.
     pub fn toZigType(self: Self) type {
         return switch (self) {
