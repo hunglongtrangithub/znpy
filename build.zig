@@ -16,8 +16,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
-    const demo_step = b.step("demo", "Run demo");
-
     inline for (examples) |example_name| {
         const demo_exe = b.addExecutable(.{
             .name = example_name,
@@ -34,7 +32,6 @@ pub fn build(b: *std.Build) void {
         const run_cmd = b.addRunArtifact(demo_exe);
         const run_step = b.step(example_name, "Run the " ++ example_name ++ " example");
         run_step.dependOn(&run_cmd.step);
-        demo_step.dependOn(b.getInstallStep());
     }
 
     const mod_tests = b.addTest(.{

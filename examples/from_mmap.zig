@@ -62,12 +62,14 @@ pub fn main() !void {
     try stdout.print("Array's start address: {any}\n", .{array.data_buffer.ptr});
     try stdout.print("Array's memory order: {any}\n", .{array.shape.order});
 
-    try stdout.print("Getting slice array[:5]\n", .{});
+    try stdout.print("First 5 elements of the array:\n", .{});
     const array_view = try array.slice(
         &znpy.s(.{.{ null, 5 }}),
         allocator,
     );
     defer array_view.deinit(allocator);
+
+    try stdout.print("{f}\n", .{array_view});
 
     try stdout.flush();
     return;
