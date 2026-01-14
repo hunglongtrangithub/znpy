@@ -126,7 +126,7 @@ pub fn DynamicArray(comptime T: type) type {
             self: *const Self,
             writer: *std.io.Writer,
             allocator: std.mem.Allocator,
-        ) (std.io.Writer.Error || std.mem.Allocator.Error)!void {
+        ) (header_mod.WriteHeaderError || std.mem.Allocator.Error)!void {
             const header = header_mod.Header{
                 // Force specified endianness to arch's native endian
                 .descr = element_type.withEndian(native_endian),

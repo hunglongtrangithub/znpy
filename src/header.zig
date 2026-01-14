@@ -96,6 +96,11 @@ const ParseHeaderError = error{
     UnsupportedDescrType,
 };
 
+pub const WriteHeaderError = error{
+    /// The header is too large to be written in the .npy format.
+    HeaderTooLarge,
+} || std.io.Writer.Error;
+
 /// A simple slice reader that tracks position without copying data.
 pub const SliceReader = struct {
     /// The underlying byte slice to read from (owned by caller).
@@ -381,7 +386,7 @@ pub const Header = struct {
         self: *const Self,
         writer: *std.io.Writer,
         allocator: std.mem.Allocator,
-    ) !void {
+    ) WriteHeaderError!void {
         const header_string = try self.toPythonString(allocator);
 
         const min_content_len = header_string.len + 1; // +1 for \n
@@ -393,6 +398,10 @@ pub const Header = struct {
 
         // Check if we need v2.0
         if (header_len > std.math.maxInt(u16)) {
+            // Reject headers that are too large for v2.0
+            if (header_len > std.math.maxInt(u32)) {
+                return WriteHeaderError.HeaderTooLarge;
+            }
             prefix_len += 2; // v2.0 uses 4 bytes for length
             total_aligned = std.mem.alignForward(usize, prefix_len + min_content_len, 64);
             header_len = total_aligned - prefix_len;
