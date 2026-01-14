@@ -11,7 +11,8 @@ const pointer_mod = @import("../pointer.zig");
 
 const native_endian = builtin.cpu.arch.endian();
 
-pub const FromFileBufferError = elements_mod.ReadHeaderError || shape_mod.DynamicShape.Error || elements_mod.ViewDataError;
+pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.DynamicShape.Error || elements_mod.ViewDataError;
+pub const FromFileReaderError = header_mod.ReadHeaderError || shape_mod.DynamicShape.Error || elements_mod.ReadDataError;
 
 /// Generic function to create either a `StaticArray` or `ConstStaticArray` from a numpy file buffer,
 /// depending on the mutability of the input buffer.
@@ -66,7 +67,7 @@ pub fn DynamicArray(comptime T: type) type {
 
         const Self = @This();
 
-        pub const InitError = shape_mod.DynamicShape.InitError || std.mem.AllocError;
+        pub const InitError = shape_mod.DynamicShape.Error || std.mem.Allocator.Error;
 
         /// Initialize a new `DynamicArray` with the given dimensions and order.
         /// A new data buffer will be allocated using the provided allocator.
@@ -112,10 +113,11 @@ pub fn DynamicArray(comptime T: type) type {
             return arrayFromFileBuffer(T, file_buffer, allocator);
         }
 
-        pub fn fromFileAlloc(file_reader: *std.io.Reader, allocator: std.mem.Allocator) FromFileBufferError!Self {
+        /// Create a `DynamicArray` by reading from a file reader in numpy file format.
+        pub fn fromFileAlloc(file_reader: *std.io.Reader, allocator: std.mem.Allocator) FromFileReaderError!Self {
             const header = try header_mod.Header.fromReader(file_reader, allocator);
             // header's dims are owned by shape, so no need to defer deinit here
-            const shape = try shape_mod.DynamicShape.fromHeader(header);
+            const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
 
             // Allocate the data buffer and read data from the file
             const data_buffer = try allocator.alloc(T, shape.num_elements);
@@ -132,6 +134,7 @@ pub fn DynamicArray(comptime T: type) type {
             };
         }
 
+        /// Write the array (both header and array data) to a writer in numpy file format.
         pub fn writeAll(
             self: *const Self,
             writer: *std.io.Writer,
@@ -237,10 +240,19 @@ pub fn ConstDynamicArray(comptime T: type) type {
 
         const Self = @This();
 
-        /// Create a `DynamicArrayView` from a numpy file buffer.
-        /// The buffer must contain a valid numpy array file.
+        /// Create a `ConstDynamicArray` from a numpy file buffer.
+        /// The returned array borrows the buffer's data; no copy is made.
+        /// Do not use `deinit` on the returned array, as it does not own the buffer,
+        /// but make sure to call `deinitMetadata` to free the shape when done.
         pub fn fromFileBuffer(file_buffer: []const u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
             return arrayFromFileBuffer(T, file_buffer, allocator);
+        }
+
+        /// Free only the shape metadata, not the data buffer.
+        /// Use this for arrays created with `fromFileBuffer`
+        /// where the buffer is externally managed.
+        pub fn deinitMetadata(self: Self, allocator: std.mem.Allocator) void {
+            self.shape.deinit(allocator);
         }
 
         /// Deallocate the array by deallocating the shape data

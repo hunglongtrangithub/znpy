@@ -27,6 +27,7 @@ pub fn main() !void {
     var file_buffer: [1024]u8 = undefined;
     var file_reader = std.fs.File.Reader.init(file, &file_buffer);
     const array = try Array.fromFileAlloc(&file_reader.interface, allocator);
+    defer array.deinit(allocator);
 
     try stdout.print("Formatted array:\n{f}\n", .{array});
     try stdout.print("Array shape: {any}\n", .{array.shape.dims});

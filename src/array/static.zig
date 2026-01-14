@@ -103,10 +103,14 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
         /// Create a `StaticArray` from a numpy file buffer.
         /// The returned array borrows the buffer's data; no copy is made.
         /// Do not use `deinit` on the returned array, as it does not own the buffer.
+        /// No need to free the shape, as it is owned by the array struct.
         pub fn fromFileBuffer(file_buffer: []u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
             return arrayFromFileBuffer(T, rank, file_buffer, allocator);
         }
 
+        /// Create a `StaticArray` by reading from a numpy file reader.
+        /// The data buffer is allocated using the provided allocator.
+        // To free the array data, call `deinit`.
         pub fn fromFileAlloc(file_reader: *std.io.Reader, allocator: std.mem.Allocator) FromFileReaderError!Self {
             const header = try header_mod.Header.fromReader(file_reader, allocator);
             defer header.deinit(allocator);
@@ -127,6 +131,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
             };
         }
 
+        /// Write the array (both header and array data) to a writer in numpy file format.
         pub fn writeAll(
             self: *const Self,
             writer: *std.io.Writer,
@@ -236,6 +241,8 @@ pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
 
         /// Create a `ConstStaticArrayView` from a numpy file buffer.
         /// The buffer must contain a valid numpy array file.
+        /// The returned array borrows the buffer's data; no copy is made.
+        /// No need to free the shape, as it is owned by the array struct.
         pub fn fromFileBuffer(file_buffer: []const u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
             return arrayFromFileBuffer(T, rank, file_buffer, allocator);
         }
