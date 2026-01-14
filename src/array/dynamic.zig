@@ -26,11 +26,11 @@ else
     var slice_reader = header_mod.SliceReader.init(file_buffer);
 
     const header = try header_mod.Header.fromSliceReader(&slice_reader, allocator);
-    // We can defer here since the shape will hold its own copy of the dims slice it its struct
-    defer header.deinit(allocator);
+    // We don't defer here since the shape will hold the dims from the header
+    errdefer header.deinit(allocator);
 
     const byte_buffer = file_buffer[slice_reader.pos..];
-    const shape = try shape_mod.DynamicArray.fromHeader(header);
+    const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
 
     const data_buffer = try elements_mod.Element(T).bytesAsSlice(
         byte_buffer,

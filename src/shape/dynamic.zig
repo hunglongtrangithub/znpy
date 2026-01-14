@@ -45,6 +45,7 @@ pub const DynamicShape = struct {
 
     /// Create a `DynamicShape` from a numpy header.
     /// Returns an error if the shape's total size in bytes overflows isize.
+    /// The dims slice from Header is borrowed; the strides slice is allocated.
     /// Allocates memory for strides using the provided allocator.
     pub fn fromHeader(npy_header: header_mod.Header, allocator: std.mem.Allocator) Error!Self {
         // Extract shape
