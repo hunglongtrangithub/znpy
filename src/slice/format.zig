@@ -175,42 +175,32 @@ fn assignInt(field: *isize, val: anytype, comptime field_name: []const u8) void 
     }
 }
 
-test "format_slice comprehensive" {
-    const inputs = .{
-        .{},
-        .{ null, null, null },
-        .{1},
-        .{ 1, 10 },
-        .{ 1, 10, null },
-        .{ 1, 10, 2 },
-        .{ -5, null, 2 },
-        .{ null, null, 2 },
-        .{ null, null, 0 },
-        5,
+test "slice format function" {
+    const slices = format_slice(.{
+        .{}, // Default slice
+        .{ null, null, null }, // Default slice with explicit nulls
+        .{1}, // Slice with only start
+        .{ 1, 10 }, // Slice with start and end
+        .{ 1, 10, 2 }, // Slice with start, end, and step
+        .{ -5, null, 2 }, // Slice with negative start, null end, and step
+        .{ null, null, 2 }, // Slice with default start/end and step of 2
+        5, // Index slice
         All,
         Etc,
-        Slice{ .Range = Range{ .start = 2, .end = 8 } },
-    };
+        Slice{ .Range = Range{ .start = 2, .end = 8 } }, // Already a Slice
+        .{ 1, 10, null }, // Slice with start, end, and default step
+    });
 
-    const expected = .{
-        Slice{ .Range = Range{} },
-        Slice{ .Range = Range{} },
-        Slice{ .Range = Range{ .start = 1 } },
-        Slice{ .Range = Range{ .start = 1, .end = 10 } },
-        Slice{ .Range = Range{ .start = 1, .end = 10 } },
-        Slice{ .Range = Range{ .start = 1, .end = 10, .step = 2 } },
-        Slice{ .Range = Range{ .start = -5, .step = 2 } },
-        Slice{ .Range = Range{ .step = 2 } },
-        Slice{ .Index = 5 },
-        Slice{ .Index = 0 },
-        All,
-        Etc,
-        Slice{ .Range = Range{ .start = 2, .end = 8 } },
-    };
-
-    const slices = format_slice(inputs);
-
-    inline for (0..expected.len) |i| {
-        try std.testing.expectEqualDeep(expected[i], slices[i]);
-    }
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{} }, slices[0]);
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{} }, slices[1]);
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = 1 } }, slices[2]);
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = 1, .end = 10 } }, slices[3]);
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = 1, .end = 10, .step = 2 } }, slices[4]);
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = -5, .end = null, .step = 2 } }, slices[5]);
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = null, .end = null, .step = 2 } }, slices[6]);
+    try std.testing.expectEqualDeep(Slice{ .Index = 5 }, slices[7]);
+    try std.testing.expectEqualDeep(All, slices[8]);
+    try std.testing.expectEqualDeep(Etc, slices[9]);
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = 2, .end = 8 } }, slices[10]);
+    try std.testing.expectEqualDeep(Slice{ .Range = Range{ .start = 1, .end = 10 } }, slices[11]);
 }

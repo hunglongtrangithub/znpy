@@ -13,6 +13,7 @@ const native_endian = builtin.cpu.arch.endian();
 
 pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.DynamicShape.Error || elements_mod.ViewDataError;
 pub const FromFileReaderError = header_mod.ReadHeaderError || shape_mod.DynamicShape.Error || elements_mod.ReadDataError;
+pub const InitError = shape_mod.DynamicShape.Error || std.mem.Allocator.Error;
 
 /// Generic function to create either a `StaticArray` or `ConstStaticArray` from a numpy file buffer,
 /// depending on the mutability of the input buffer.
@@ -66,8 +67,6 @@ pub fn DynamicArray(comptime T: type) type {
         data_buffer: []T,
 
         const Self = @This();
-
-        pub const InitError = shape_mod.DynamicShape.Error || std.mem.Allocator.Error;
 
         /// Initialize a new `DynamicArray` with the given dimensions and order.
         /// A new data buffer will be allocated using the provided allocator.
@@ -139,12 +138,12 @@ pub fn DynamicArray(comptime T: type) type {
             self: *const Self,
             writer: *std.io.Writer,
             allocator: std.mem.Allocator,
-        ) (header_mod.WriteHeaderError || std.mem.Allocator.Error)!void {
+        ) header_mod.WriteHeaderError!void {
             const header = header_mod.Header{
                 // Force specified endianness to arch's native endian
                 .descr = element_type.withEndian(native_endian),
                 .order = self.shape.order,
-                .shape = &self.shape.dims,
+                .shape = self.shape.dims,
             };
             // Write header
             try header.writeAll(writer, allocator);
@@ -232,6 +231,7 @@ pub fn DynamicArray(comptime T: type) type {
 ///
 /// `T` is the element type.
 pub fn ConstDynamicArray(comptime T: type) type {
+    const element_type = elements_mod.ElementType.fromZigType(T) catch @compileError("Unsupported element type for ConstDynamicArray");
     return struct {
         /// The shape of the array (dimensions, strides, order, num_elements)
         shape: shape_mod.DynamicShape,
@@ -239,6 +239,29 @@ pub fn ConstDynamicArray(comptime T: type) type {
         data_buffer: []const T,
 
         const Self = @This();
+
+        /// Initialize a new `ConstDynamicArray` with the given dimensions and order.
+        /// A new data buffer will be allocated using the provided allocator.
+        pub fn init(
+            dims: []const usize,
+            order: shape_mod.Order,
+            allocator: std.mem.Allocator,
+        ) InitError!Self {
+            const shape = try shape_mod.DynamicShape.init(
+                dims,
+                order,
+                element_type,
+                allocator,
+            );
+
+            // Allocate the data buffer
+            const data_buffer = try allocator.alloc(T, shape.num_elements);
+
+            return Self{
+                .shape = shape,
+                .data_buffer = data_buffer,
+            };
+        }
 
         /// Create a `ConstDynamicArray` from a numpy file buffer.
         /// The returned array borrows the buffer's data; no copy is made.
@@ -255,9 +278,10 @@ pub fn ConstDynamicArray(comptime T: type) type {
             self.shape.deinit(allocator);
         }
 
-        /// Deallocate the array by deallocating the shape data
+        /// Deallocate the array by deallocating the shape data and the data buffer.
         pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
             self.shape.deinit(allocator);
+            allocator.free(self.data_buffer);
         }
 
         /// Create a const view of this array.
@@ -310,7 +334,7 @@ pub fn ConstDynamicArray(comptime T: type) type {
             self: *const Self,
             slices: []const slice_mod.Slice,
             allocator: std.mem.Allocator,
-        ) (slice_mod.SliceError || std.mem.Allocator.Error)!view_mod.ArrayView(T) {
+        ) (slice_mod.SliceError || std.mem.Allocator.Error)!view_mod.ConstArrayView(T) {
             return try self.asView().slice(slices, allocator);
         }
 
@@ -350,18 +374,18 @@ test "DynamicArray - public at() function" {
     // Test that at() is now public and returns correct pointers
     const ptr00 = array.at(&[_]usize{ 0, 0 });
     try std.testing.expect(ptr00 != null);
-    try std.testing.expectEqual(@as(f64, 1.5), ptr00.?.*);
+    try std.testing.expectEqual(1.5, ptr00.?.*);
 
     const ptr12 = array.at(&[_]usize{ 1, 2 });
     try std.testing.expect(ptr12 != null);
-    try std.testing.expectEqual(@as(f64, 6.5), ptr12.?.*);
+    try std.testing.expectEqual(6.5, ptr12.?.*);
 
     // Test bounds checking
-    try std.testing.expectEqual(@as(?*f64, null), array.at(&[_]usize{ 2, 0 }));
-    try std.testing.expectEqual(@as(?*f64, null), array.at(&[_]usize{ 0, 3 }));
+    try std.testing.expectEqual(null, array.at(&[_]usize{ 2, 0 }));
+    try std.testing.expectEqual(null, array.at(&[_]usize{ 0, 3 }));
 
     // Test dimension mismatch
-    try std.testing.expectEqual(@as(?*f64, null), array.at(&[_]usize{0}));
+    try std.testing.expectEqual(null, array.at(&[_]usize{0}));
 }
 
 test "DynamicArray - atUnchecked() for performance" {
@@ -417,7 +441,7 @@ test "ConstDynamicArray - public at() returns const pointer" {
     // Verify at() returns const pointer
     const ptr = array.at(&[_]usize{ 0, 0 });
     try std.testing.expect(ptr != null);
-    try std.testing.expectEqual(@as(u32, 1), ptr.?.*);
+    try std.testing.expectEqual(1, ptr.?.*);
 
     // Verify return type is *const u32
     const ptr_type = @TypeOf(ptr.?);
@@ -444,9 +468,305 @@ test "ConstDynamicArray - atUnchecked() returns const pointer" {
     };
 
     const ptr = array.atUnchecked(&[_]usize{ 1, 1 });
-    try std.testing.expectEqual(@as(i8, 40), ptr.*);
+    try std.testing.expectEqual(40, ptr.*);
 
     // Verify return type is *const i8
     const ptr_type = @TypeOf(ptr);
     try std.testing.expect(ptr_type == *const i8);
+}
+
+test "DynamicArray.init" {
+    const allocator = std.testing.allocator;
+
+    // Test 1D array
+    const Array1D = DynamicArray(f64);
+    const dims1d = [_]usize{5};
+    var array1d = try Array1D.init(&dims1d, .C, allocator);
+    defer array1d.deinit(allocator);
+
+    try std.testing.expectEqual(5, array1d.shape.num_elements);
+    try std.testing.expectEqualSlices(usize, &dims1d, array1d.shape.dims);
+    try std.testing.expect(array1d.shape.order == .C);
+    try std.testing.expectEqual(5, array1d.data_buffer.len);
+
+    // Test 2D array
+    const Array2D = DynamicArray(i32);
+    const dims2d = [_]usize{ 2, 3 };
+    var array2d = try Array2D.init(&dims2d, .F, allocator);
+    defer array2d.deinit(allocator);
+
+    try std.testing.expectEqual(6, array2d.shape.num_elements);
+    try std.testing.expectEqualSlices(usize, &dims2d, array2d.shape.dims);
+    try std.testing.expect(array2d.shape.order == .F);
+    try std.testing.expectEqual(6, array2d.data_buffer.len);
+
+    // Test 3D array
+    const Array3D = DynamicArray(u8);
+    const dims3d = [_]usize{ 2, 2, 2 };
+    var array3d = try Array3D.init(&dims3d, .C, allocator);
+    defer array3d.deinit(allocator);
+
+    try std.testing.expectEqual(8, array3d.shape.num_elements);
+    try std.testing.expectEqualSlices(usize, &dims3d, array3d.shape.dims);
+    try std.testing.expect(array3d.shape.order == .C);
+    try std.testing.expectEqual(8, array3d.data_buffer.len);
+}
+
+test "ConstDynamicArray.init" {
+    const allocator = std.testing.allocator;
+
+    // Test 1D array
+    const ConstArray1D = ConstDynamicArray(f64);
+    const dims1d = [_]usize{5};
+    var array1d = try ConstArray1D.init(&dims1d, .C, allocator);
+    defer array1d.deinit(allocator);
+
+    try std.testing.expectEqual(5, array1d.shape.num_elements);
+    try std.testing.expectEqualSlices(usize, &dims1d, array1d.shape.dims);
+    try std.testing.expect(array1d.shape.order == .C);
+    try std.testing.expectEqual(5, array1d.data_buffer.len);
+
+    // Test 2D array
+    const ConstArray2D = ConstDynamicArray(i32);
+    const dims2d = [_]usize{ 2, 3 };
+    var array2d = try ConstArray2D.init(&dims2d, .F, allocator);
+    defer array2d.deinit(allocator);
+
+    try std.testing.expectEqual(6, array2d.shape.num_elements);
+    try std.testing.expectEqualSlices(usize, &dims2d, array2d.shape.dims);
+    try std.testing.expect(array2d.shape.order == .F);
+    try std.testing.expectEqual(6, array2d.data_buffer.len);
+}
+
+test "DynamicArray.deinit" {
+    const allocator = std.testing.allocator;
+
+    // Create an array
+    const Array = DynamicArray(f64);
+    const dims = [_]usize{ 2, 3 };
+    var array = try Array.init(&dims, .C, allocator);
+
+    // Deinit should not crash
+    array.deinit(allocator);
+}
+
+test "ConstDynamicArray.deinit" {
+    const allocator = std.testing.allocator;
+
+    // Create a const array using init
+    const ConstArray = ConstDynamicArray(f64);
+    const dims = [_]usize{ 2, 3 };
+    var array = try ConstArray.init(&dims, .C, allocator);
+
+    // Deinit should free both the data buffer and shape
+    array.deinit(allocator);
+
+    // After deinit, the array is freed, test passes if no crash
+}
+
+test "DynamicArray.deinitMetadata" {
+    const allocator = std.testing.allocator;
+
+    // Create an array with owned data
+    const Array = DynamicArray(f64);
+    const dims = [_]usize{ 2, 3 };
+    var array = try Array.init(&dims, .C, allocator);
+
+    // Set some data
+    array.data_buffer[0] = 42.0;
+    array.data_buffer[1] = 43.0;
+
+    // Deinit metadata only - should free shape but not data buffer
+    array.deinitMetadata(allocator);
+
+    // Data buffer should still be accessible and contain the data
+    try std.testing.expectEqual(42.0, array.data_buffer[0]);
+    try std.testing.expectEqual(43.0, array.data_buffer[1]);
+
+    // Now manually free the data buffer since it wasn't freed
+    allocator.free(array.data_buffer);
+}
+
+test "ConstDynamicArray.deinitMetadata" {
+    const allocator = std.testing.allocator;
+
+    // Create a const array
+    const data = [_]f64{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
+    const dims = [_]usize{ 2, 3 };
+    const shape = try shape_mod.DynamicShape.init(
+        &dims,
+        .C,
+        elements_mod.ElementType{ .Float64 = null },
+        allocator,
+    );
+
+    const ConstArray = ConstDynamicArray(f64);
+    var array = ConstArray{
+        .shape = shape,
+        .data_buffer = &data,
+    };
+
+    // Deinit metadata - should free shape but not touch data buffer
+    array.deinitMetadata(allocator);
+
+    // Data buffer should still be accessible
+    try std.testing.expectEqual(1.0, data[0]);
+    try std.testing.expectEqual(2.0, data[1]);
+}
+
+test "DynamicArray.get" {
+    const allocator = std.testing.allocator;
+
+    const Array = DynamicArray(i32);
+    const dims = [_]usize{ 2, 3 };
+    var array = try Array.init(&dims, .C, allocator);
+    defer array.deinit(allocator);
+
+    // Set some values
+    array.data_buffer[0] = 10;
+    array.data_buffer[1] = 20;
+    array.data_buffer[2] = 30;
+    array.data_buffer[3] = 40;
+    array.data_buffer[4] = 50;
+    array.data_buffer[5] = 60;
+
+    // Test valid indices
+    try std.testing.expectEqual(10, array.get(&[_]usize{ 0, 0 }));
+    try std.testing.expectEqual(20, array.get(&[_]usize{ 0, 1 }));
+    try std.testing.expectEqual(30, array.get(&[_]usize{ 0, 2 }));
+    try std.testing.expectEqual(40, array.get(&[_]usize{ 1, 0 }));
+    try std.testing.expectEqual(50, array.get(&[_]usize{ 1, 1 }));
+    try std.testing.expectEqual(60, array.get(&[_]usize{ 1, 2 }));
+
+    // Test out of bounds
+    try std.testing.expectEqual(null, array.get(&[_]usize{ 2, 0 }));
+    try std.testing.expectEqual(null, array.get(&[_]usize{ 0, 3 }));
+    try std.testing.expectEqual(null, array.get(&[_]usize{ 1, 3 }));
+
+    // Test wrong number of dimensions
+    try std.testing.expectEqual(null, array.get(&[_]usize{0}));
+    try std.testing.expectEqual(null, array.get(&[_]usize{ 0, 0, 0 }));
+}
+
+test "ConstDynamicArray.get" {
+    const allocator = std.testing.allocator;
+
+    const data = [_]i32{ 10, 20, 30, 40, 50, 60 };
+    const dims = [_]usize{ 2, 3 };
+    const shape = try shape_mod.DynamicShape.init(
+        &dims,
+        .C,
+        elements_mod.ElementType{ .Int32 = null },
+        allocator,
+    );
+    defer shape.deinit(allocator);
+
+    const ConstArray = ConstDynamicArray(i32);
+    const array = ConstArray{
+        .shape = shape,
+        .data_buffer = &data,
+    };
+
+    // Test valid indices
+    try std.testing.expectEqual(10, array.get(&[_]usize{ 0, 0 }));
+    try std.testing.expectEqual(20, array.get(&[_]usize{ 0, 1 }));
+    try std.testing.expectEqual(30, array.get(&[_]usize{ 0, 2 }));
+    try std.testing.expectEqual(40, array.get(&[_]usize{ 1, 0 }));
+    try std.testing.expectEqual(50, array.get(&[_]usize{ 1, 1 }));
+    try std.testing.expectEqual(60, array.get(&[_]usize{ 1, 2 }));
+
+    // Test out of bounds
+    try std.testing.expectEqual(null, array.get(&[_]usize{ 2, 0 }));
+    try std.testing.expectEqual(null, array.get(&[_]usize{ 0, 3 }));
+}
+
+test "DynamicArray.set" {
+    const allocator = std.testing.allocator;
+
+    const Array = DynamicArray(i32);
+    const dims = [_]usize{ 2, 3 };
+    var array = try Array.init(&dims, .C, allocator);
+    defer array.deinit(allocator);
+
+    // Set values
+    array.set(&[_]usize{ 0, 0 }, 100);
+    array.set(&[_]usize{ 0, 1 }, 200);
+    array.set(&[_]usize{ 0, 2 }, 300);
+    array.set(&[_]usize{ 1, 0 }, 400);
+    array.set(&[_]usize{ 1, 1 }, 500);
+    array.set(&[_]usize{ 1, 2 }, 600);
+
+    // Verify values were set
+    try std.testing.expectEqual(100, array.data_buffer[0]);
+    try std.testing.expectEqual(200, array.data_buffer[1]);
+    try std.testing.expectEqual(300, array.data_buffer[2]);
+    try std.testing.expectEqual(400, array.data_buffer[3]);
+    try std.testing.expectEqual(500, array.data_buffer[4]);
+    try std.testing.expectEqual(600, array.data_buffer[5]);
+}
+
+test "DynamicArray.slice" {
+    const allocator = std.testing.allocator;
+
+    const Array = DynamicArray(i32);
+    const dims = [_]usize{ 2, 3 };
+    var array = try Array.init(&dims, .C, allocator);
+    defer array.deinit(allocator);
+
+    // Set values: [[10, 20, 30], [40, 50, 60]]
+    array.set(&[_]usize{ 0, 0 }, 10);
+    array.set(&[_]usize{ 0, 1 }, 20);
+    array.set(&[_]usize{ 0, 2 }, 30);
+    array.set(&[_]usize{ 1, 0 }, 40);
+    array.set(&[_]usize{ 1, 1 }, 50);
+    array.set(&[_]usize{ 1, 2 }, 60);
+
+    // Slice to get second column: [:, 1]
+    const slices = [_]slice_mod.Slice{
+        slice_mod.All,
+        .{ .Index = 1 },
+    };
+    var sliced = try array.slice(&slices, allocator);
+    defer sliced.deinit(allocator);
+
+    // Should result in 1D array [20, 50]
+    try std.testing.expectEqual(1, sliced.dims.len);
+    try std.testing.expectEqual(2, sliced.dims[0]);
+    try std.testing.expectEqual(20, sliced.get(&[_]usize{0}));
+    try std.testing.expectEqual(50, sliced.get(&[_]usize{1}));
+}
+
+test "ConstDynamicArray.slice" {
+    const allocator = std.testing.allocator;
+
+    const data = [_]i32{ 10, 20, 30, 40, 50, 60 };
+    const dims = [_]usize{ 2, 3 };
+    const shape = try shape_mod.DynamicShape.init(
+        &dims,
+        .C,
+        elements_mod.ElementType{ .Int32 = null },
+        allocator,
+    );
+    defer shape.deinit(allocator);
+
+    const ConstArray = ConstDynamicArray(i32);
+    const array = ConstArray{
+        .shape = shape,
+        .data_buffer = &data,
+    };
+
+    // Slice to get first row: [0, :]
+    const slices = [_]slice_mod.Slice{
+        .{ .Index = 0 },
+        slice_mod.All,
+    };
+    var sliced = try array.slice(&slices, allocator);
+    defer sliced.deinit(allocator);
+
+    // Should result in 1D array [10, 20, 30]
+    try std.testing.expectEqual(1, sliced.dims.len);
+    try std.testing.expectEqual(3, sliced.dims[0]);
+    try std.testing.expectEqual(10, sliced.get(&[_]usize{0}));
+    try std.testing.expectEqual(20, sliced.get(&[_]usize{1}));
+    try std.testing.expectEqual(30, sliced.get(&[_]usize{2}));
 }

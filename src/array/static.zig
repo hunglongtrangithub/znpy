@@ -71,7 +71,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
 
         const Self = @This();
 
-        pub const InitError = shape_mod.StaticShape(rank).InitError || std.mem.Allocator.Error;
+        pub const InitError = shape_mod.static.InitError || std.mem.Allocator.Error;
 
         /// Initialize a new `StaticArray` with the given dimensions and order.
         /// A new data buffer will be allocated using the provided allocator.
@@ -593,9 +593,109 @@ test "ConstStaticArray - atUnchecked() returns const pointer" {
     };
 
     const ptr = array.atUnchecked([_]usize{ 1, 1 });
-    try std.testing.expectEqual(@as(i8, 40), ptr.*);
+    try std.testing.expectEqual(40, ptr.*);
 
     // Verify return type is *const i8
     const ptr_type = @TypeOf(ptr);
     try std.testing.expect(ptr_type == *const i8);
+}
+
+test "StaticArray.init" {
+    const allocator = std.testing.allocator;
+
+    // Test 1D array
+    const Array1D = StaticArray(f64, 1);
+    var array1d = try Array1D.init([_]usize{5}, .C, allocator);
+    defer array1d.deinit(allocator);
+
+    try std.testing.expectEqual(5, array1d.shape.num_elements);
+    try std.testing.expectEqualSlices(usize, &[_]usize{5}, &array1d.shape.dims);
+    try std.testing.expect(array1d.shape.order == .C);
+    try std.testing.expectEqual(5, array1d.data_buffer.len);
+
+    // Test 2D array
+    const Array2D = StaticArray(i32, 2);
+    var array2d = try Array2D.init([_]usize{ 2, 3 }, .F, allocator);
+    defer array2d.deinit(allocator);
+
+    try std.testing.expectEqual(6, array2d.shape.num_elements);
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 2, 3 }, &array2d.shape.dims);
+    try std.testing.expect(array2d.shape.order == .F);
+    try std.testing.expectEqual(6, array2d.data_buffer.len);
+
+    // Test 3D array
+    const Array3D = StaticArray(u8, 3);
+    var array3d = try Array3D.init([_]usize{ 2, 2, 2 }, .C, allocator);
+    defer array3d.deinit(allocator);
+
+    try std.testing.expectEqual(8, array3d.shape.num_elements);
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 2, 2, 2 }, &array3d.shape.dims);
+    try std.testing.expect(array3d.shape.order == .C);
+    try std.testing.expectEqual(8, array3d.data_buffer.len);
+}
+
+test "StaticArray.deinit" {
+    const allocator = std.testing.allocator;
+
+    // Create an array
+    const Array = StaticArray(f64, 2);
+    var array = try Array.init([_]usize{ 2, 3 }, .C, allocator);
+
+    // Deinit should not crash
+    array.deinit(allocator);
+
+    // After deinit, we can't access the array safely, but the test passes if no crash occurs
+}
+
+test "StaticArray.get" {
+    const allocator = std.testing.allocator;
+
+    const Array = StaticArray(i32, 2);
+    var array = try Array.init([_]usize{ 2, 3 }, .C, allocator);
+    defer array.deinit(allocator);
+
+    // Set some values
+    array.set([_]usize{ 0, 0 }, 10);
+    array.set([_]usize{ 0, 1 }, 20);
+    array.set([_]usize{ 0, 2 }, 30);
+    array.set([_]usize{ 1, 0 }, 40);
+    array.set([_]usize{ 1, 1 }, 50);
+    array.set([_]usize{ 1, 2 }, 60);
+
+    // Test valid indices
+    try std.testing.expectEqual(10, array.get([_]usize{ 0, 0 }));
+    try std.testing.expectEqual(20, array.get([_]usize{ 0, 1 }));
+    try std.testing.expectEqual(30, array.get([_]usize{ 0, 2 }));
+    try std.testing.expectEqual(40, array.get([_]usize{ 1, 0 }));
+    try std.testing.expectEqual(50, array.get([_]usize{ 1, 1 }));
+    try std.testing.expectEqual(60, array.get([_]usize{ 1, 2 }));
+
+    // Test out of bounds
+    try std.testing.expectEqual(null, array.get([_]usize{ 2, 0 }));
+    try std.testing.expectEqual(null, array.get([_]usize{ 0, 3 }));
+    try std.testing.expectEqual(null, array.get([_]usize{ 1, 3 }));
+}
+
+test "StaticArray.set" {
+    const allocator = std.testing.allocator;
+
+    const Array = StaticArray(i32, 2);
+    var array = try Array.init([_]usize{ 2, 3 }, .C, allocator);
+    defer array.deinit(allocator);
+
+    // Set values
+    array.set([_]usize{ 0, 0 }, 100);
+    array.set([_]usize{ 0, 1 }, 200);
+    array.set([_]usize{ 0, 2 }, 300);
+    array.set([_]usize{ 1, 0 }, 400);
+    array.set([_]usize{ 1, 1 }, 500);
+    array.set([_]usize{ 1, 2 }, 600);
+
+    // Verify values were set
+    try std.testing.expectEqual(100, array.data_buffer[0]);
+    try std.testing.expectEqual(200, array.data_buffer[1]);
+    try std.testing.expectEqual(300, array.data_buffer[2]);
+    try std.testing.expectEqual(400, array.data_buffer[3]);
+    try std.testing.expectEqual(500, array.data_buffer[4]);
+    try std.testing.expectEqual(600, array.data_buffer[5]);
 }

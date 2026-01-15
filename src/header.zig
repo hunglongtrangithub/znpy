@@ -99,7 +99,7 @@ const ParseHeaderError = error{
 pub const WriteHeaderError = error{
     /// The header is too large to be written in the .npy format.
     HeaderTooLarge,
-} || std.io.Writer.Error;
+} || std.io.Writer.Error || std.mem.Allocator.Error;
 
 /// A simple slice reader that tracks position without copying data.
 pub const SliceReader = struct {
