@@ -20,7 +20,7 @@ Make sure [Zig](https://ziglang.org/download/) is installed.
 Run demos:
 
 ```sh
-zig build <demo_name>
+zig build demo_<demo_name>
 ```
 
 Where `<demo_name>` is the name of a file in `examples/` without the `.zig` extension (e.g., `zig build endian`).

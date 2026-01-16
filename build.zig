@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) void {
         });
 
         const run_cmd = b.addRunArtifact(demo_exe);
-        const run_step = b.step(example_name, "Run the " ++ example_name ++ " example");
+        const run_step = b.step("demo_" ++ example_name, "Run the " ++ example_name ++ " example");
         run_step.dependOn(&run_cmd.step);
     }
 
