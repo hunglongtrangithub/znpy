@@ -15,7 +15,7 @@ In my recent project that involves working with large vector datasets, our old c
 
 ## Usage
 
-Make sure [Zig](https://ziglang.org/download/) is installed.
+Make sure [Zig 0.15.2](https://ziglang.org/download/) is installed.
 
 Run demos:
 
