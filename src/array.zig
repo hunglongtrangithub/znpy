@@ -30,17 +30,10 @@
 //! - **Views**: May reference non-contiguous data via strides
 const std = @import("std");
 
-const dynamic = @import("array/dynamic.zig");
-const static = @import("array/static.zig");
-const view = @import("array/view.zig");
+pub const dynamic = @import("array/dynamic.zig");
+pub const static = @import("array/static.zig");
+pub const view = @import("array/view.zig");
 const format = @import("array/format.zig");
-
-pub const ArrayView = view.ArrayView;
-pub const ConstArrayView = view.ConstArrayView;
-pub const DynamicArray = dynamic.DynamicArray;
-pub const ConstDynamicArray = dynamic.ConstDynamicArray;
-pub const StaticArray = static.StaticArray;
-pub const ConstStaticArray = static.ConstStaticArray;
 
 test {
     _ = dynamic;
