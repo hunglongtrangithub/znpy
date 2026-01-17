@@ -36,7 +36,7 @@ else
 
     const data_buffer = try elements_mod.Element(T).bytesAsSlice(
         byte_buffer,
-        shape.num_elements,
+        shape.numElements(),
         header.descr,
     );
 
@@ -64,7 +64,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
     const element_type = elements_mod.ElementType.fromZigType(T) catch @compileError("Unsupported type for StaticArray");
 
     return struct {
-        /// The shape of the array (dimensions, strides, order, num_elements)
+        /// The shape of the array (dimensions, strides, order)
         shape: shape_mod.StaticShape(rank),
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []T,
@@ -87,7 +87,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
             );
 
             // Allocate the data buffer
-            const data_buffer = try allocator.alloc(T, shape.num_elements);
+            const data_buffer = try allocator.alloc(T, shape.numElements());
 
             return Self{
                 .shape = shape,
@@ -117,7 +117,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
             const shape = try shape_mod.StaticShape(rank).fromHeader(header);
 
             // Allocate the data buffer and read data from the file
-            const data_buffer = try allocator.alloc(T, shape.num_elements);
+            const data_buffer = try allocator.alloc(T, shape.numElements());
             errdefer allocator.free(data_buffer);
             try elements_mod.Element(T).readSlice(
                 data_buffer,
@@ -232,7 +232,7 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
 pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
     // TODO: consider adding a check to reject ranks that are too large, or limit rank to u8?
     return struct {
-        /// The shape of the array (dimensions, strides, order, num_elements)
+        /// The shape of the array (dimensions, strides, order)
         shape: shape_mod.StaticShape(rank),
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []const T,
@@ -325,7 +325,6 @@ test "StaticArrayView(f64, 2) - basic 2D array" {
             .dims = [_]usize{ 2, 3 },
             .strides = [_]isize{ 3, 1 }, // C-order strides
             .order = .C,
-            .num_elements = 6,
         },
         .data_buffer = &data,
     };
@@ -353,7 +352,6 @@ test "StaticArrayView(i32, 3) - 3D array C order" {
             .dims = [_]usize{ 2, 3, 4 },
             .strides = [_]isize{ 12, 4, 1 }, // C-order: (3*4, 4, 1)
             .order = .C,
-            .num_elements = 24,
         },
         .data_buffer = &data,
     };
@@ -380,7 +378,6 @@ test "StaticArrayView(f32, 2) - Fortran order strides" {
             .dims = [_]usize{ 3, 4 },
             .strides = [_]isize{ 1, 3 }, // F-order: (1, 3)
             .order = .F,
-            .num_elements = 12,
         },
         .data_buffer = &data,
     };
@@ -401,7 +398,6 @@ test "StaticArrayView(i32, 1) - 1D array" {
             .dims = [_]usize{5},
             .strides = [_]isize{1},
             .order = .C,
-            .num_elements = 5,
         },
         .data_buffer = &data,
     };
@@ -422,7 +418,6 @@ test "StaticArrayView(f64, 2) - out of bounds access" {
             .dims = [_]usize{ 2, 2 },
             .strides = [_]isize{ 2, 1 },
             .order = .C,
-            .num_elements = 4,
         },
         .data_buffer = &data,
     };
@@ -446,7 +441,6 @@ test "StaticArrayView(bool, 2) - boolean array" {
             .dims = [_]usize{ 2, 2 },
             .strides = [_]isize{ 2, 1 },
             .order = .C,
-            .num_elements = 4,
         },
         .data_buffer = &data,
     };
@@ -471,7 +465,6 @@ test "StaticArrayView(i32, 4) - 4D array" {
             .dims = [_]usize{ 2, 2, 2, 2 },
             .strides = [_]isize{ 8, 4, 2, 1 }, // C-order
             .order = .C,
-            .num_elements = 16,
         },
         .data_buffer = &data,
     };
@@ -491,7 +484,6 @@ test "StaticArrayView(u8, 2) - modification through pointer" {
             .dims = [_]usize{ 2, 3 },
             .strides = [_]isize{ 3, 1 },
             .order = .C,
-            .num_elements = 6,
         },
         .data_buffer = &data,
     };
@@ -515,7 +507,6 @@ test "StaticArrayView(i16, 3) - single element in each dimension" {
             .dims = [_]usize{ 1, 1, 1 },
             .strides = [_]isize{ 1, 1, 1 },
             .order = .C,
-            .num_elements = 1,
         },
         .data_buffer = &data,
     };
@@ -537,7 +528,6 @@ test "StaticArray - atUnchecked() for performance" {
             .dims = [_]usize{5},
             .strides = [_]isize{1},
             .order = .C,
-            .num_elements = 5,
         },
         .data_buffer = &data,
     };
@@ -563,7 +553,6 @@ test "ConstStaticArray - at() returns const pointer" {
             .dims = [_]usize{ 2, 2 },
             .strides = [_]isize{ 2, 1 },
             .order = .C,
-            .num_elements = 4,
         },
         .data_buffer = &data,
     };
@@ -587,7 +576,6 @@ test "ConstStaticArray - atUnchecked() returns const pointer" {
             .dims = [_]usize{ 2, 2 },
             .strides = [_]isize{ 2, 1 },
             .order = .C,
-            .num_elements = 4,
         },
         .data_buffer = &data,
     };
@@ -608,7 +596,7 @@ test "StaticArray.init" {
     var array1d = try Array1D.init([_]usize{5}, .C, allocator);
     defer array1d.deinit(allocator);
 
-    try std.testing.expectEqual(5, array1d.shape.num_elements);
+    try std.testing.expectEqual(5, array1d.shape.numElements());
     try std.testing.expectEqualSlices(usize, &[_]usize{5}, &array1d.shape.dims);
     try std.testing.expect(array1d.shape.order == .C);
     try std.testing.expectEqual(5, array1d.data_buffer.len);
@@ -618,7 +606,7 @@ test "StaticArray.init" {
     var array2d = try Array2D.init([_]usize{ 2, 3 }, .F, allocator);
     defer array2d.deinit(allocator);
 
-    try std.testing.expectEqual(6, array2d.shape.num_elements);
+    try std.testing.expectEqual(6, array2d.shape.numElements());
     try std.testing.expectEqualSlices(usize, &[_]usize{ 2, 3 }, &array2d.shape.dims);
     try std.testing.expect(array2d.shape.order == .F);
     try std.testing.expectEqual(6, array2d.data_buffer.len);
@@ -628,7 +616,7 @@ test "StaticArray.init" {
     var array3d = try Array3D.init([_]usize{ 2, 2, 2 }, .C, allocator);
     defer array3d.deinit(allocator);
 
-    try std.testing.expectEqual(8, array3d.shape.num_elements);
+    try std.testing.expectEqual(8, array3d.shape.numElements());
     try std.testing.expectEqualSlices(usize, &[_]usize{ 2, 2, 2 }, &array3d.shape.dims);
     try std.testing.expect(array3d.shape.order == .C);
     try std.testing.expectEqual(8, array3d.data_buffer.len);

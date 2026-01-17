@@ -36,7 +36,7 @@ else
 
     const data_buffer = try elements_mod.Element(T).bytesAsSlice(
         byte_buffer,
-        shape.num_elements,
+        shape.numElements(),
         header.descr,
     );
 
@@ -61,7 +61,7 @@ else
 pub fn DynamicArray(comptime T: type) type {
     const element_type = elements_mod.ElementType.fromZigType(T) catch @compileError("Unsupported element type for DynamicArray");
     return struct {
-        /// The shape of the array (dimensions, strides, order, num_elements)
+        /// The shape of the array (dimensions, strides, order)
         shape: shape_mod.DynamicShape,
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []T,
@@ -83,7 +83,7 @@ pub fn DynamicArray(comptime T: type) type {
             );
 
             // Allocate the data buffer
-            const data_buffer = try allocator.alloc(T, shape.num_elements);
+            const data_buffer = try allocator.alloc(T, shape.numElements());
 
             return Self{
                 .shape = shape,
@@ -119,7 +119,7 @@ pub fn DynamicArray(comptime T: type) type {
             const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
 
             // Allocate the data buffer and read data from the file
-            const data_buffer = try allocator.alloc(T, shape.num_elements);
+            const data_buffer = try allocator.alloc(T, shape.numElements());
             errdefer allocator.free(data_buffer);
             try elements_mod.Element(T).readSlice(
                 data_buffer,
@@ -233,7 +233,7 @@ pub fn DynamicArray(comptime T: type) type {
 pub fn ConstDynamicArray(comptime T: type) type {
     const element_type = elements_mod.ElementType.fromZigType(T) catch @compileError("Unsupported element type for ConstDynamicArray");
     return struct {
-        /// The shape of the array (dimensions, strides, order, num_elements)
+        /// The shape of the array (dimensions, strides, order)
         shape: shape_mod.DynamicShape,
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []const T,
@@ -255,7 +255,7 @@ pub fn ConstDynamicArray(comptime T: type) type {
             );
 
             // Allocate the data buffer
-            const data_buffer = try allocator.alloc(T, shape.num_elements);
+            const data_buffer = try allocator.alloc(T, shape.numElements());
 
             return Self{
                 .shape = shape,
@@ -484,7 +484,7 @@ test "DynamicArray.init" {
     var array1d = try Array1D.init(&dims1d, .C, allocator);
     defer array1d.deinit(allocator);
 
-    try std.testing.expectEqual(5, array1d.shape.num_elements);
+    try std.testing.expectEqual(5, array1d.shape.numElements());
     try std.testing.expectEqualSlices(usize, &dims1d, array1d.shape.dims);
     try std.testing.expect(array1d.shape.order == .C);
     try std.testing.expectEqual(5, array1d.data_buffer.len);
@@ -495,7 +495,7 @@ test "DynamicArray.init" {
     var array2d = try Array2D.init(&dims2d, .F, allocator);
     defer array2d.deinit(allocator);
 
-    try std.testing.expectEqual(6, array2d.shape.num_elements);
+    try std.testing.expectEqual(6, array2d.shape.numElements());
     try std.testing.expectEqualSlices(usize, &dims2d, array2d.shape.dims);
     try std.testing.expect(array2d.shape.order == .F);
     try std.testing.expectEqual(6, array2d.data_buffer.len);
@@ -506,7 +506,7 @@ test "DynamicArray.init" {
     var array3d = try Array3D.init(&dims3d, .C, allocator);
     defer array3d.deinit(allocator);
 
-    try std.testing.expectEqual(8, array3d.shape.num_elements);
+    try std.testing.expectEqual(8, array3d.shape.numElements());
     try std.testing.expectEqualSlices(usize, &dims3d, array3d.shape.dims);
     try std.testing.expect(array3d.shape.order == .C);
     try std.testing.expectEqual(8, array3d.data_buffer.len);
@@ -521,7 +521,7 @@ test "ConstDynamicArray.init" {
     var array1d = try ConstArray1D.init(&dims1d, .C, allocator);
     defer array1d.deinit(allocator);
 
-    try std.testing.expectEqual(5, array1d.shape.num_elements);
+    try std.testing.expectEqual(5, array1d.shape.numElements());
     try std.testing.expectEqualSlices(usize, &dims1d, array1d.shape.dims);
     try std.testing.expect(array1d.shape.order == .C);
     try std.testing.expectEqual(5, array1d.data_buffer.len);
@@ -532,7 +532,7 @@ test "ConstDynamicArray.init" {
     var array2d = try ConstArray2D.init(&dims2d, .F, allocator);
     defer array2d.deinit(allocator);
 
-    try std.testing.expectEqual(6, array2d.shape.num_elements);
+    try std.testing.expectEqual(6, array2d.shape.numElements());
     try std.testing.expectEqualSlices(usize, &dims2d, array2d.shape.dims);
     try std.testing.expect(array2d.shape.order == .F);
     try std.testing.expectEqual(6, array2d.data_buffer.len);

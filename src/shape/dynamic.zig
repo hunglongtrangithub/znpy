@@ -11,8 +11,6 @@ pub const DynamicShape = struct {
     dims: []const usize,
     /// The strides for indexing into the array. Allocated with samelength as dims.
     strides: []const isize,
-    /// The total number of elements in the array
-    num_elements: usize,
     /// The memory order of the array.
     order: shape_mod.Order,
 
@@ -28,7 +26,7 @@ pub const DynamicShape = struct {
         allocator: std.mem.Allocator,
     ) Error!Self {
         // Check that the shape length fits in isize
-        const num_elements = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
+        _ = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
             return Error.ShapeSizeOverflow;
         };
         const strides = try computeStrides(dims, order, allocator);
@@ -39,7 +37,6 @@ pub const DynamicShape = struct {
             .dims = dims,
             .order = order,
             .strides = strides,
-            .num_elements = num_elements,
         };
     }
 
@@ -52,7 +49,7 @@ pub const DynamicShape = struct {
         const dims = npy_header.shape;
 
         // Check that the shape length fits in isize
-        const num_elements = shape_mod.shapeSizeChecked(npy_header.descr, dims[0..]) orelse {
+        _ = shape_mod.shapeSizeChecked(npy_header.descr, dims[0..]) orelse {
             return error.ShapeSizeOverflow;
         };
         const strides = try computeStrides(dims, npy_header.order, allocator);
@@ -60,7 +57,18 @@ pub const DynamicShape = struct {
             .dims = dims,
             .order = npy_header.order,
             .strides = strides,
-            .num_elements = num_elements,
+        };
+    }
+
+    /// Get the total number of elements from the shape.
+    pub fn numElements(self: *const Self) usize {
+        const rank = self.dims.len;
+        if (rank == 0) {
+            return 1;
+        }
+        return switch (self.order) {
+            .C => @as(usize, @intCast(self.strides[0])) * self.dims[0],
+            .F => @as(usize, @intCast(self.strides[rank - 1])) * self.dims[rank - 1],
         };
     }
 
@@ -140,7 +148,7 @@ test "DynamicShape.fromHeader - valid shape" {
         &shape_data,
         shape.dims,
     );
-    try std.testing.expectEqual(24, shape.num_elements);
+    try std.testing.expectEqual(24, shape.numElements());
     try std.testing.expectEqual(shape_mod.Order.C, shape.order);
 }
 

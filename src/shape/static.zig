@@ -22,8 +22,6 @@ pub fn StaticShape(comptime rank: usize) type {
         dims: [rank]usize,
         /// The strides for indexing into the array
         strides: [rank]isize,
-        /// The total number of elements in the array
-        num_elements: usize,
         /// The memory order of the array.
         order: shape_mod.Order,
 
@@ -36,7 +34,7 @@ pub fn StaticShape(comptime rank: usize) type {
             descr: elements_mod.ElementType,
         ) InitError!Self {
             // Check that the shape length fits in isize
-            const num_elements = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
+            _ = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
                 return InitError.ShapeSizeOverflow;
             };
             const strides = computeStrides(dims, order);
@@ -47,7 +45,6 @@ pub fn StaticShape(comptime rank: usize) type {
                 .dims = dims,
                 .order = order,
                 .strides = strides,
-                .num_elements = num_elements,
             };
         }
 
@@ -67,7 +64,7 @@ pub fn StaticShape(comptime rank: usize) type {
             };
 
             // Check that the shape length fits in isize
-            const num_elements = shape_mod.shapeSizeChecked(header.descr, dims[0..]) orelse {
+            _ = shape_mod.shapeSizeChecked(header.descr, dims[0..]) orelse {
                 return error.ShapeSizeOverflow;
             };
             const strides = computeStrides(dims, header.order);
@@ -78,7 +75,17 @@ pub fn StaticShape(comptime rank: usize) type {
                 .dims = dims,
                 .order = header.order,
                 .strides = strides,
-                .num_elements = num_elements,
+            };
+        }
+
+        /// Get the total number of elements from the shape.
+        pub fn numElements(self: *const Self) usize {
+            if (rank == 0) {
+                return 1;
+            }
+            return switch (self.order) {
+                .C => @as(usize, @intCast(self.strides[0])) * self.dims[0],
+                .F => @as(usize, @intCast(self.strides[rank - 1])) * self.dims[rank - 1],
             };
         }
 
@@ -139,7 +146,7 @@ test "StaticShape(0) - scalar shape" {
     const Shape0D = StaticShape(0);
     const shape = try Shape0D.init([_]usize{}, .C, .{ .Float64 = null });
     // Scalar shape has 1 element
-    try std.testing.expectEqual(1, shape.num_elements);
+    try std.testing.expectEqual(1, shape.numElements());
     const strides = shape.strides;
     try std.testing.expectEqual(0, strides.len);
 }
@@ -148,7 +155,7 @@ test "StaticShape(1) - 1D shape" {
     const Shape1D = StaticShape(1);
     const shape = try Shape1D.init([_]usize{10}, .C, .{ .Float64 = null });
     // Shape (10) has 10 elements
-    try std.testing.expectEqual(10, shape.num_elements);
+    try std.testing.expectEqual(10, shape.numElements());
     const strides = shape.strides;
     try std.testing.expectEqualSlices(isize, &[_]isize{1}, &strides);
 }
@@ -157,7 +164,7 @@ test "StaticShape(2) - 2D C order" {
     const Shape2D = StaticShape(2);
     const shape = try Shape2D.init([_]usize{ 5, 7 }, .C, .{ .Float64 = null });
     // Shape (5, 7) has 35 elements
-    try std.testing.expectEqual(35, shape.num_elements);
+    try std.testing.expectEqual(35, shape.numElements());
     const strides = shape.strides;
     // C order: strides are (7, 1)
     try std.testing.expectEqualSlices(isize, &[_]isize{ 7, 1 }, &strides);
@@ -167,7 +174,7 @@ test "StaticShape(2) - 2D F order" {
     const Shape2D = StaticShape(2);
     const shape = try Shape2D.init([_]usize{ 5, 7 }, .F, .{ .Float64 = null });
     // Shape (5, 7) has 35 elements
-    try std.testing.expectEqual(35, shape.num_elements);
+    try std.testing.expectEqual(35, shape.numElements());
     const strides = shape.strides;
     // F order: strides are (1, 5)
     try std.testing.expectEqualSlices(isize, &[_]isize{ 1, 5 }, &strides);
@@ -177,7 +184,7 @@ test "StaticShape(3) - 3D C order" {
     const Shape3D = StaticShape(3);
     const shape = try Shape3D.init([_]usize{ 2, 3, 4 }, .C, .{ .Float64 = null });
     // Shape (2, 3, 4) has 24 elements
-    try std.testing.expectEqual(24, shape.num_elements);
+    try std.testing.expectEqual(24, shape.numElements());
     const strides = shape.strides;
     // C order: strides are (12, 4, 1)
     try std.testing.expectEqualSlices(isize, &[_]isize{ 12, 4, 1 }, &strides);
@@ -187,7 +194,7 @@ test "StaticShape(3) - 3D F order" {
     const Shape3D = StaticShape(3);
     const shape = try Shape3D.init([_]usize{ 2, 3, 4 }, .F, .{ .Float64 = null });
     // Shape (2, 3, 4) has 24 elements
-    try std.testing.expectEqual(24, shape.num_elements);
+    try std.testing.expectEqual(24, shape.numElements());
     const strides = shape.strides;
     // F order: strides are (1, 2, 6)
     try std.testing.expectEqualSlices(isize, &[_]isize{ 1, 2, 6 }, &strides);
@@ -197,7 +204,7 @@ test "StaticShape(3) - shape with zero dimension" {
     const Shape3D = StaticShape(3);
     const shape = try Shape3D.init([_]usize{ 3, 0, 5 }, .C, .{ .Float64 = null });
     // Shape (3, 0, 5) has 0 elements (zero dimension)
-    try std.testing.expectEqual(0, shape.num_elements);
+    try std.testing.expectEqual(0, shape.numElements());
     const strides = shape.strides;
     // All strides should be zero
     try std.testing.expectEqualSlices(isize, &[_]isize{ 0, 0, 0 }, &strides);
@@ -207,7 +214,7 @@ test "StaticShape(4) - 4D C order" {
     const Shape4D = StaticShape(4);
     const shape = try Shape4D.init([_]usize{ 2, 3, 4, 5 }, .C, .{ .Float64 = null });
     // Shape (2, 3, 4, 5) has 120 elements
-    try std.testing.expectEqual(120, shape.num_elements);
+    try std.testing.expectEqual(120, shape.numElements());
     const strides = shape.strides;
     // C order: strides are (60, 20, 5, 1)
     try std.testing.expectEqualSlices(isize, &[_]isize{ 60, 20, 5, 1 }, &strides);
@@ -217,7 +224,7 @@ test "StaticShape(4) - 4D F order" {
     const Shape4D = StaticShape(4);
     const shape = try Shape4D.init([_]usize{ 2, 3, 4, 5 }, .F, .{ .Float64 = null });
     // Shape (2, 3, 4, 5) has 120 elements
-    try std.testing.expectEqual(120, shape.num_elements);
+    try std.testing.expectEqual(120, shape.numElements());
     const strides = shape.strides;
     // F order: strides are (1, 2, 6, 24)
     try std.testing.expectEqualSlices(isize, &[_]isize{ 1, 2, 6, 24 }, &strides);
@@ -232,7 +239,7 @@ test "StaticShape.fromHeader - valid 2D" {
         .order = .C,
     };
     const shape = try Shape2D.fromHeader(npy_header);
-    try std.testing.expectEqual(12, shape.num_elements);
+    try std.testing.expectEqual(12, shape.numElements());
     try std.testing.expectEqualSlices(isize, &[_]isize{ 4, 1 }, &shape.strides);
     try std.testing.expectEqual(shape_mod.Order.C, shape.order);
 }
