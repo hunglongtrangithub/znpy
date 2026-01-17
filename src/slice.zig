@@ -19,7 +19,7 @@ const format_mod = @import("./slice/format.zig");
 const array_mod = @import("./array.zig");
 const pointer_mod = @import("./pointer.zig");
 
-const ArrayView = array_mod.ArrayView;
+const ArrayView = array_mod.view.ArrayView;
 const Range = range_mod.Range;
 
 pub const Slice = union(enum) {
