@@ -133,6 +133,38 @@ pub fn DynamicArray(comptime T: type) type {
             };
         }
 
+        /// Same as `fromFileAlloc`, but ensures the data buffer is aligned to the specified byte alignment.
+        /// Can be used when SIMD operations require specific alignment.
+        pub fn fromFileAllocAligned(
+            file_reader: *std.io.Reader,
+            comptime alignment: std.mem.Alignment,
+            allocator: std.mem.Allocator,
+        ) FromFileReaderError!Self {
+            const header = try header_mod.Header.fromReader(file_reader, allocator);
+            defer header.deinit(allocator);
+            const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
+
+            // 1. Use alignedAlloc to ensure alignment
+            const data_buffer = try allocator.alignedAlloc(
+                T,
+                alignment,
+                shape.numElements(),
+            );
+            errdefer allocator.free(data_buffer);
+
+            // 2. Read directly into the aligned buffer
+            try elements_mod.Element(T).readSlice(
+                data_buffer,
+                file_reader,
+                header.descr,
+            );
+
+            return Self{
+                .shape = shape,
+                .data_buffer = data_buffer,
+            };
+        }
+
         /// Write the array (both header and array data) to a writer in numpy file format.
         pub fn writeAll(
             self: *const Self,
