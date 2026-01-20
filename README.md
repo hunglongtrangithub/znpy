@@ -10,7 +10,7 @@ In my recent project that involves working with large vector datasets, our old c
 
 - Read and write Npy files
 - Create memory-owned arrays
-- Create array views from arrays
+- Create array views from arrays with Numpy-style slicing
 - Print arrays to stdout in structured array format
 
 ## Usage
