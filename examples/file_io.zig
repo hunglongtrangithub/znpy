@@ -60,7 +60,7 @@ pub fn main() !void {
     const shapes_equal = std.mem.eql(usize, &array.shape.dims, &array2.shape.dims);
     const strides_equal = std.mem.eql(isize, &array.shape.strides, &array2.shape.strides);
     const orders_equal = array.shape.order == array2.shape.order;
-    const num_elements_equal = array.shape.num_elements == array2.shape.num_elements;
+    const num_elements_equal = array.shape.numElements() == array2.shape.numElements();
     const data_equal = std.mem.eql(f32, array.data_buffer, array2.data_buffer);
 
     try stdout.print("\n=== Comparison Results ===\n", .{});

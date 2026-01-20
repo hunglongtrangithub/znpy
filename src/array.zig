@@ -35,6 +35,13 @@ pub const static = @import("array/static.zig");
 pub const view = @import("array/view.zig");
 const format = @import("array/format.zig");
 
+pub const StaticArray = static.StaticArray;
+pub const ConstStaticArray = static.ConstStaticArray;
+pub const DynamicArray = dynamic.DynamicArray;
+pub const ConstDynamicArray = dynamic.ConstDynamicArray;
+pub const ArrayView = view.ArrayView;
+pub const ConstArrayView = view.ConstArrayView;
+
 test {
     _ = dynamic;
     _ = static;
