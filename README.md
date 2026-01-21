@@ -23,7 +23,7 @@ Run demos:
 zig build demo_<demo_name>
 ```
 
-Where `<demo_name>` is the name of a file in `examples/` without the `.zig` extension (e.g., `zig build endian`).
+Where `<demo_name>` is the name of a file in `examples/` without the `.zig` extension (e.g., `zig build demo_endian`).
 
 Run tests:
 
