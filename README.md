@@ -44,3 +44,8 @@ Run the script to generate npy files:
 ```sh
 uv run main.py
 ```
+
+## Acknowledgements
+
+1. [ndarray](https://github.com/rust-ndarray/ndarray)
+2. [ndarray-npy](https://github.com/jturner314/ndarray-npy)
