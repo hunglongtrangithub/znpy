@@ -28,8 +28,7 @@ else
     var slice_reader = header_mod.SliceReader.init(file_buffer);
 
     const header = try header_mod.Header.fromSliceReader(&slice_reader, allocator);
-    // We don't defer here since the shape will hold the dims from the header
-    errdefer header.deinit(allocator);
+    defer header.deinit(allocator);
 
     const byte_buffer = file_buffer[slice_reader.pos..];
     const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
@@ -115,7 +114,7 @@ pub fn DynamicArray(comptime T: type) type {
         /// Create a `DynamicArray` by reading from a file reader in numpy file format.
         pub fn fromFileAlloc(file_reader: *std.io.Reader, allocator: std.mem.Allocator) FromFileReaderError!Self {
             const header = try header_mod.Header.fromReader(file_reader, allocator);
-            // header's dims are owned by shape, so no need to defer deinit here
+            defer header.deinit(allocator);
             const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
 
             // Allocate the data buffer and read data from the file

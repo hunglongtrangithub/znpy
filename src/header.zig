@@ -322,8 +322,7 @@ pub const Header = struct {
                 switch (shape_ast) {
                     .Tuple => |tuple| {
                         // Allocate and copy shape data
-                        const shape_slice = try allocator.alloc(usize, tuple.items.len);
-                        @memcpy(shape_slice, tuple.items);
+                        const shape_slice = try allocator.dupe(usize, tuple.items);
                         header_data.shape = shape_slice;
                     },
                     else => return ParseHeaderError.InvalidValueShape,
@@ -387,6 +386,7 @@ pub const Header = struct {
         allocator: std.mem.Allocator,
     ) WriteHeaderError!void {
         const header_string = try self.toPythonString(allocator);
+        defer allocator.free(header_string);
 
         const min_content_len = header_string.len + 1; // +1 for \n
 

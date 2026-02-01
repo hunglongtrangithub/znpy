@@ -5,7 +5,7 @@ const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 
 pub const DynamicShape = struct {
-    /// The size of each dimension. Slice is owned by the caller.
+    /// The size of each dimension.
     /// The total number of elements is the product of all dimensions,
     /// which must not overflow `std.math.maxInt(isize)`.
     dims: []const usize,
@@ -26,15 +26,18 @@ pub const DynamicShape = struct {
         allocator: std.mem.Allocator,
     ) Error!Self {
         // Check that the shape length fits in isize
-        _ = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
+        _ = shape_mod.shapeSizeChecked(descr, dims) orelse {
             return Error.ShapeSizeOverflow;
         };
         const strides = try computeStrides(dims, order, allocator);
 
         std.debug.assert(strides.len == dims.len);
 
+        // Clone the dims
+        const shape_dims = try allocator.dupe(usize, dims);
+
         return Self{
-            .dims = dims,
+            .dims = shape_dims,
             .order = order,
             .strides = strides,
         };
@@ -42,11 +45,11 @@ pub const DynamicShape = struct {
 
     /// Create a `DynamicShape` from a numpy header.
     /// Returns an error if the shape's total size in bytes overflows isize.
-    /// The dims slice from Header is borrowed; the strides slice is allocated.
-    /// Allocates memory for strides using the provided allocator.
+    /// The dims slice and the strides slice are allocated.
     pub fn fromHeader(npy_header: header_mod.Header, allocator: std.mem.Allocator) Error!Self {
-        // Extract shape
-        const dims = npy_header.shape;
+        // Clone shape dims
+        const dims = try allocator.dupe(usize, npy_header.shape);
+        errdefer allocator.free(dims);
 
         // Check that the shape length fits in isize
         _ = shape_mod.shapeSizeChecked(npy_header.descr, dims[0..]) orelse {
@@ -75,6 +78,7 @@ pub const DynamicShape = struct {
     /// Free the memory allocated for the strides.
     pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
         allocator.free(self.strides);
+        allocator.free(self.dims);
     }
 
     /// Compute the strides for a given shape and order, allocating memory from the given allocator.
