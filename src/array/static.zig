@@ -56,10 +56,12 @@ else
 /// A multi-dimensional array with static rank.
 /// The view does not own the underlying data buffer.
 /// You can read and write elements through this view.
-///
-/// `T` is the element type.
-/// `rank` is the number of dimensions.
-pub fn StaticArray(comptime T: type, comptime rank: usize) type {
+pub fn StaticArray(
+    /// The element type.
+    comptime T: type,
+    /// The number of dimensions.
+    comptime rank: usize,
+) type {
     // TODO: consider adding a check to reject ranks that are too large, or limit rank to u8?
     const element_type = elements_mod.ElementType.fromZigType(T) catch @compileError("Unsupported type for StaticArray");
 
@@ -258,10 +260,12 @@ pub fn StaticArray(comptime T: type, comptime rank: usize) type {
 /// A view into a multi-dimensional array with static rank.
 /// The view does not own the underlying data buffer.
 /// You can only read elements through this view.
-///
-/// `T` is the element type.
-/// `rank` is the number of dimensions.
-pub fn ConstStaticArray(comptime T: type, comptime rank: usize) type {
+pub fn ConstStaticArray(
+    /// The element type.
+    comptime T: type,
+    /// The number of dimensions.
+    comptime rank: usize,
+) type {
     // TODO: consider adding a check to reject ranks that are too large, or limit rank to u8?
     return struct {
         /// The shape of the array (dimensions, strides, order)
