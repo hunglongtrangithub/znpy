@@ -94,23 +94,35 @@ pub const ElementType = union(enum) {
         };
     }
 
-    /// Converts the ElementType to the corresponding Zig type.
-    pub fn toZigType(self: Self) type {
-        return switch (self) {
-            .Bool => bool,
-            .Int8 => i8,
-            .Int16 => i16,
-            .Int32 => i32,
-            .Int64 => i64,
-            .UInt8 => u8,
-            .UInt16 => u16,
-            .UInt32 => u32,
-            .UInt64 => u64,
-            .Float32 => f32,
-            .Float64 => f64,
-            .Float128 => f128,
-            .Complex64 => std.math.Complex(f32),
-            .Complex128 => std.math.Complex(f64),
+    /// Generates a random value of type T, validated against the ElementType logic.
+    pub fn randomValue(comptime T: type, rand: std.Random) T {
+        // 1. Validate that T is supported by our ElementType mapping
+        const elem_type = comptime ElementType.fromZigType(T) catch
+            @compileError("Unsupported type: " ++ @typeName(T));
+
+        // 2. Switch on the union tag to handle generation logic
+        return switch (elem_type) {
+            .Bool => rand.boolean(),
+
+            // Integers:
+            .Int8, .UInt8, .Int16, .UInt16, .Int32, .UInt32, .Int64, .UInt64 => {
+                return rand.int(T);
+            },
+
+            // Floats: Usually best to generate between 0.0 and 1.0 for tests
+            .Float32, .Float64, .Float128 => {
+                return rand.float(T);
+            },
+
+            // Complex Numbers: Randomize real and imaginary parts separately
+            .Complex64 => .{
+                .re = rand.float(f32),
+                .im = rand.float(f32),
+            },
+            .Complex128 => .{
+                .re = rand.float(f64),
+                .im = rand.float(f64),
+            },
         };
     }
 
