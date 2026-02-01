@@ -137,6 +137,11 @@ pub const Header = struct {
     /// The array order, extracted from the 'fortran_order' key.
     order: shape.Order,
 
+    const VersionProps = struct {
+        header_size_type: HeaderSizeType,
+        header_encoding: HeaderEncoding,
+    };
+
     const Self = @This();
 
     const MAGIC = "\x93NUMPY";
@@ -158,20 +163,20 @@ pub const Header = struct {
         const minor_version = eight_bytes[7];
 
         // Get version
-        const header_size_type, const encoding = version: {
+        const version_props: VersionProps = version: {
             if (minor_version != 0) {
                 return ParseHeaderError.UnsupportedVersion;
             }
             switch (major_version) {
-                1 => break :version struct { HeaderEncoding.U16, HeaderEncoding.Ascii },
-                2 => break :version struct { HeaderEncoding.U32, HeaderEncoding.Ascii },
-                3 => break :version struct { HeaderEncoding.U32, HeaderEncoding.Utf8 },
+                1 => break :version .{ .header_size_type = .U16, .header_encoding = .Ascii },
+                2 => break :version .{ .header_size_type = .U32, .header_encoding = .Ascii },
+                3 => break :version .{ .header_size_type = .U32, .header_encoding = .Utf8 },
                 else => return ParseHeaderError.UnsupportedVersion,
             }
         };
 
         // Read the header size in little-endian format and cast to usize
-        const header_size: usize = header_size: switch (header_size_type) {
+        const header_size: usize = header_size: switch (version_props.header_size_type) {
             .U16 => {
                 const size_bytes = slice_reader.readBytes(2) catch {
                     return ParseHeaderError.IoError;
@@ -199,7 +204,7 @@ pub const Header = struct {
         }
         // Trim newline and spaces right before it
         const trimmed_header = std.mem.trimRight(u8, header_buffer[0 .. header_buffer.len - 1], " ");
-        return Self.fromPythonString(trimmed_header, encoding, allocator);
+        return Self.fromPythonString(trimmed_header, version_props.header_encoding, allocator);
     }
 
     /// Reads and parses the header from a reader (`std.io.Reader`).
@@ -220,20 +225,20 @@ pub const Header = struct {
         const minor_version = eight_byte_buffer[7];
 
         // Get version
-        const header_size_type, const encoding = version: {
+        const version_props: VersionProps = version: {
             if (minor_version != 0) {
                 return ParseHeaderError.UnsupportedVersion;
             }
             switch (major_version) {
-                1 => break :version struct { HeaderEncoding.U16, HeaderEncoding.Ascii },
-                2 => break :version struct { HeaderEncoding.U32, HeaderEncoding.Ascii },
-                3 => break :version struct { HeaderEncoding.U32, HeaderEncoding.Utf8 },
+                1 => break :version .{ .header_size_type = .U16, .header_encoding = .Ascii },
+                2 => break :version .{ .header_size_type = .U32, .header_encoding = .Ascii },
+                3 => break :version .{ .header_size_type = .U32, .header_encoding = .Utf8 },
                 else => return ParseHeaderError.UnsupportedVersion,
             }
         };
 
         // Read the header size in little-endian format and cast to usize
-        const header_size: usize = header_size: switch (header_size_type) {
+        const header_size: usize = header_size: switch (version_props.header_size_type) {
             .U16 => {
                 var size_buffer: [2]u8 = undefined;
                 reader.readSliceAll(size_buffer[0..]) catch {
@@ -266,7 +271,7 @@ pub const Header = struct {
         }
         // Trim newline and spaces right before it
         const trimmed_header = std.mem.trimRight(u8, header_buffer[0 .. header_buffer.len - 1], " ");
-        return Self.fromPythonString(trimmed_header, encoding, allocator);
+        return Self.fromPythonString(trimmed_header, version_props.header_encoding, allocator);
     }
 
     /// Parses the given string buffer info a Header struct.
