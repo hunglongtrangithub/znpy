@@ -183,7 +183,7 @@ pub const Lexer = struct {
                 const number = std.fmt.parseInt(usize, number_string, 10) catch return LexerError.InvalidNumberLiteral;
                 break :blk .{ .Literal = .{ .Number = number } };
             },
-            // Identifiers: True, False, or any seqauence of letters and underscores
+            // Identifiers: True, False, or any sequence of letters and underscores
             'A'...'Z', 'a'...'z', '_' => blk: {
                 const start = self.position;
                 self.position += 1; // Consume first character

@@ -94,70 +94,66 @@ pub const Parser = struct {
             Final,
         };
 
-        // Initialize state machine
-        var state: State = .Start;
-        while (state != .Final) {
-            const token = try self.lexer.advance();
-            switch (state) {
-                .Start => switch (token) {
-                    // Empty map
-                    .RBrace => state = .Final,
-                    .Literal => |k|
-                    // Expect string literal as key
-                    switch (k) {
-                        .String => |s| {
-                            state = .{ .Key = s };
-                        },
-                        else => return ParserError.InvalidKey,
+        // Run the state machine
+        state: switch (@as(State, .Start)) {
+            .Start => switch (try self.lexer.advance()) {
+                // Empty map
+                .RBrace => continue :state .Final,
+                .Literal => |k|
+                // Expect string literal as key
+                switch (k) {
+                    .String => |s| {
+                        continue :state .{ .Key = s };
                     },
                     else => return ParserError.InvalidKey,
                 },
-                .Key => {
-                    // Expect colon after key
-                    if (token != .Colon) {
-                        return ParserError.MissingColonAfterKey;
-                    }
-                    // Expect value after colon
-                    switch (try self.lexer.advance()) {
-                        // Literal value
-                        .Literal => |literal| {
-                            try map.put(allocator, state.Key, .{ .Literal = literal });
-                        },
-                        .LParen => {
-                            // Parse tuple value
-                            const tuple = try self.parseTuple(allocator);
-                            try map.put(allocator, state.Key, .{ .Tuple = tuple });
-                        },
-                        .LBrace => {
-                            // Parse nested map value
-                            const nested_map = try self.parseMap(allocator);
-                            try map.put(allocator, state.Key, .{ .Map = nested_map });
-                        },
-                        else => return ParserError.InvalidValue,
-                    }
-                    state = .Value;
-                },
-                .Value => switch (token) {
-                    // Comma can only be followed by another key or closing brace
-                    .Comma => switch (try self.lexer.advance()) {
-                        // Expect another key
-                        .Literal => |k| {
-                            // Expect string literal as key
-                            switch (k) {
-                                .String => |s| {
-                                    state = .{ .Key = s };
-                                },
-                                else => return ParserError.InvalidKey,
-                            }
-                        },
-                        .RBrace => state = .Final,
-                        else => return ParserError.InvalidKey,
+                else => return ParserError.InvalidKey,
+            },
+            .Key => |key| {
+                // Expect colon after key
+                if (try self.lexer.advance() != .Colon) {
+                    return ParserError.MissingColonAfterKey;
+                }
+                // Expect value after colon
+                switch (try self.lexer.advance()) {
+                    // Literal value
+                    .Literal => |literal| {
+                        try map.put(allocator, key, .{ .Literal = literal });
                     },
-                    .RBrace => state = .Final,
-                    else => return ParserError.MissingCommaAfterValue,
+                    .LParen => {
+                        // Parse tuple value
+                        const tuple = try self.parseTuple(allocator);
+                        try map.put(allocator, key, .{ .Tuple = tuple });
+                    },
+                    .LBrace => {
+                        // Parse nested map value
+                        const nested_map = try self.parseMap(allocator);
+                        try map.put(allocator, key, .{ .Map = nested_map });
+                    },
+                    else => return ParserError.InvalidValue,
+                }
+                continue :state .Value;
+            },
+            .Value => switch (try self.lexer.advance()) {
+                // Comma can only be followed by another key or closing brace
+                .Comma => switch (try self.lexer.advance()) {
+                    // Expect another key
+                    .Literal => |k| {
+                        // Expect string literal as key
+                        switch (k) {
+                            .String => |s| {
+                                continue :state .{ .Key = s };
+                            },
+                            else => return ParserError.InvalidKey,
+                        }
+                    },
+                    .RBrace => continue :state .Final,
+                    else => return ParserError.InvalidKey,
                 },
-                .Final => unreachable,
-            }
+                .RBrace => continue :state .Final,
+                else => return ParserError.MissingCommaAfterValue,
+            },
+            .Final => {},
         }
         return map;
     }
@@ -179,56 +175,52 @@ pub const Parser = struct {
             Final,
         };
 
-        // Initialize state machine
-        var state: State = .Start;
-        while (state != .Final) {
-            const token = try self.lexer.advance();
-            switch (state) {
-                .Start => {
-                    switch (token) {
-                        // Empty tuple
-                        .RParen => state = .Final,
-                        .Literal => |literal| {
-                            switch (literal) {
-                                .Number => |n| {
-                                    try list.append(allocator, n);
-                                    state = .Literal;
-                                },
-                                else => return ParserError.InvalidTupleElement,
-                            }
-                        },
-                        else => return ParserError.InvalidTupleElement,
-                    }
-                },
-                .Literal => {
-                    switch (token) {
-                        .Comma => state = .Comma,
-                        .RParen => switch (list.items.len) {
-                            // Single-element tuple must have a trailing comma before closing parenthesis
-                            1 => return ParserError.MissingTrailingComma,
-                            // Multi-element tuple can close directly
-                            else => state = .Final,
-                        },
-                        else => return ParserError.InvalidSyntax,
-                    }
-                },
-                .Comma => {
-                    switch (token) {
-                        .Literal => |literal| {
-                            switch (literal) {
-                                .Number => |n| {
-                                    try list.append(allocator, n);
-                                    state = .Literal;
-                                },
-                                else => return ParserError.InvalidTupleElement,
-                            }
-                        },
-                        .RParen => state = .Final,
-                        else => return ParserError.InvalidSyntax,
-                    }
-                },
-                .Final => unreachable,
-            }
+        // Run the state machine
+        state: switch (@as(State, .Start)) {
+            .Start => {
+                switch (try self.lexer.advance()) {
+                    // Empty tuple
+                    .RParen => continue :state .Final,
+                    .Literal => |literal| {
+                        switch (literal) {
+                            .Number => |n| {
+                                try list.append(allocator, n);
+                                continue :state .Literal;
+                            },
+                            else => return ParserError.InvalidTupleElement,
+                        }
+                    },
+                    else => return ParserError.InvalidTupleElement,
+                }
+            },
+            .Literal => {
+                switch (try self.lexer.advance()) {
+                    .Comma => continue :state .Comma,
+                    .RParen => switch (list.items.len) {
+                        // Single-element tuple must have a trailing comma before closing parenthesis
+                        1 => return ParserError.MissingTrailingComma,
+                        // Multi-element tuple can close directly
+                        else => continue :state .Final,
+                    },
+                    else => return ParserError.InvalidSyntax,
+                }
+            },
+            .Comma => {
+                switch (try self.lexer.advance()) {
+                    .Literal => |literal| {
+                        switch (literal) {
+                            .Number => |n| {
+                                try list.append(allocator, n);
+                                continue :state .Literal;
+                            },
+                            else => return ParserError.InvalidTupleElement,
+                        }
+                    },
+                    .RParen => continue :state .Final,
+                    else => return ParserError.InvalidSyntax,
+                }
+            },
+            .Final => {},
         }
 
         return list;
