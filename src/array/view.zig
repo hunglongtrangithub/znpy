@@ -7,10 +7,8 @@ const format_mod = @import("./format.zig");
 /// Compute the flat array offset for a given multi-dimensional index.
 /// Returns:
 ///   - The computed offset as an `isize` if the index is valid
-///   - `null` if the index is invalid (wrong number of dimensions or out of bounds)
+///   - `null` if the index is invalid
 fn strideOffset(dims: []const usize, strides: []const isize, index: []const usize) ?isize {
-    // Dimension mismatch
-    if (index.len != dims.len) return null;
     std.debug.assert(strides.len == dims.len);
 
     var offset: isize = 0;
@@ -36,7 +34,10 @@ fn strideOffset(dims: []const usize, strides: []const isize, index: []const usiz
 /// When a dimension size is 0, any index for that dimension is out of bounds,
 /// so this function must never be called in that case.
 fn strideOffsetUnchecked(strides: []const isize, index: []const usize) isize {
+    std.debug.assert(strides.len == index.len);
+
     var offset: isize = 0;
+
     for (index, strides) |idx, stride| {
         const idx_isize: isize = @intCast(idx);
         offset += idx_isize * stride;
@@ -197,6 +198,7 @@ pub fn ArrayView(comptime T: type) type {
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
+        /// ```
         pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
             const const_view = self.asConst();
             try format_mod.Formatter(T).print(&const_view, writer);
@@ -622,6 +624,7 @@ pub fn ConstArrayView(comptime T: type) type {
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
+        /// ```
         pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
             try format_mod.Formatter(T).print(self, writer);
         }

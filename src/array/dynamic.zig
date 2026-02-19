@@ -249,6 +249,7 @@ pub fn DynamicArray(comptime T: type) type {
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
+        /// ```
         pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
             const view = self.asView().asConst();
             try view.format(writer);
@@ -376,6 +377,7 @@ pub fn ConstDynamicArray(comptime T: type) type {
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
+        /// ```
         pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
             const view = self.asView();
             try view.format(writer);
