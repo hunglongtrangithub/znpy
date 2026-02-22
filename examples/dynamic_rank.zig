@@ -7,8 +7,7 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     // Load data from a file using DynamicArray
-    const source_dir = comptime std.fs.path.dirname(@src().file) orelse "src";
-    const npy_file_path = comptime source_dir ++ "/../test-data/shapes/f32_2d_4x5.npy";
+    const npy_file_path = "./test-data/shapes/f32_2d_4x5.npy";
     std.debug.print("Loading NPY file from path: {s}\n", .{npy_file_path});
 
     const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {

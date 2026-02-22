@@ -8,8 +8,7 @@ var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
 const stdout = &stdout_writer.interface;
 
 pub fn main() !void {
-    const source_dir = comptime dirname(@src().file) orelse "src";
-    const npy_file_path = comptime source_dir ++ "/" ++ "../test-data/shapes/f64_1d_large.npy";
+    const npy_file_path = "./test-data/shapes/f64_1d_large.npy";
     try stdout.print("Loading NPY file from path: {s}\n", .{npy_file_path});
     try stdout.flush();
 

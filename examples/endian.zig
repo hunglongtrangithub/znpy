@@ -55,12 +55,11 @@ pub fn process2df32file(npy_file_path: []const u8) !void {
 }
 
 pub fn main() !void {
-    const source_dir = comptime dirname(@src().file) orelse "src";
-    const big_endian_file_path = comptime source_dir ++ "/" ++ "../test-data/endian/f32_2d_big.npy";
+    const big_endian_file_path = "./test-data/endian/f32_2d_big.npy";
     try stdout.print("Big endian example:\n", .{});
     try process2df32file(big_endian_file_path);
 
-    const little_endian_file_path = comptime source_dir ++ "/" ++ "../test-data/endian/f32_2d_little.npy";
+    const little_endian_file_path = "./test-data/endian/f32_2d_little.npy";
     try stdout.print("\nLittle endian example:\n", .{});
     try process2df32file(little_endian_file_path);
 }
