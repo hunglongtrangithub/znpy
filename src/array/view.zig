@@ -7,9 +7,12 @@ const format_mod = @import("./format.zig");
 /// Compute the flat array offset for a given multi-dimensional index.
 /// Returns:
 ///   - The computed offset as an `isize` if the index is valid
-///   - `null` if the index is invalid
+///   - `null` if the index slice has a different length than `dims` or if any index is out of bounds (`index[i] >= dims[i]`)
+/// Caller makes sure `dims.len == strides.len`.
 fn strideOffset(dims: []const usize, strides: []const isize, index: []const usize) ?isize {
     std.debug.assert(strides.len == dims.len);
+
+    if (index.len != dims.len) return null;
 
     var offset: isize = 0;
 
