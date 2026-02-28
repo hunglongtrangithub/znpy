@@ -48,7 +48,8 @@ const FormatConfig = struct {
 };
 
 pub fn Formatter(comptime T: type) type {
-    const element_type = elements_mod.ElementType.fromZigType(T) catch @compileError("Unsupported element type for formatting: " ++ @typeName(T));
+    const element_type = elements_mod.ElementType.fromZigType(T) catch
+        @compileError("Unsupported element type for formatting: " ++ @typeName(T));
 
     return struct {
         /// The writer to output to
@@ -142,7 +143,7 @@ pub fn Formatter(comptime T: type) type {
                 .Int8, .Int16, .Int32, .Int64, .UInt8, .UInt16, .UInt32, .UInt64 => {
                     try self.writer.print("{d:>8}", .{scalar});
                 },
-                .Float32, .Float64, .Float128 => {
+                .Float16, .Float32, .Float64, .Float128 => {
                     // Check if it's effectively an integer (within epsilon)
                     const is_int = @abs(scalar - @round(scalar)) < 1e-10;
                     if (is_int and @abs(scalar) < 1e10) {

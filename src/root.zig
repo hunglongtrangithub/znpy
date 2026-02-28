@@ -66,6 +66,9 @@ fn testIO(
     const arr2 = try array.DynamicArray(T).fromFileAlloc(&temp_file_reader.interface, allocator);
     defer arr2.deinit(allocator);
 
+    // Delete the temporary file
+    try std.fs.cwd().deleteFile(temp_file_path);
+
     // Assertions
     try std.testing.expectEqualSlices(T, arr.data_buffer, arr2.data_buffer);
     try std.testing.expectEqualSlices(usize, arr.shape.dims, arr2.shape.dims);

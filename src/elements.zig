@@ -60,6 +60,7 @@ pub fn Element(comptime T: type) type {
                 .UInt16,
                 .UInt32,
                 .UInt64,
+                .Float16,
                 .Float32,
                 .Float64,
                 .Float128,

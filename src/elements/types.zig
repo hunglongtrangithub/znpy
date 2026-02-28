@@ -37,6 +37,8 @@ pub const ElementType = union(enum) {
     UInt32: ?Endian,
     /// 64-bit unsigned integer - dtype code: 'u8'
     UInt64: ?Endian,
+    /// 16-bit floating point - dtype code: 'f2'
+    Float16: ?Endian,
     /// 32-bit floating point - dtype code: 'f4'
     Float32: ?Endian,
     /// 64-bit floating point - dtype code: 'f8'
@@ -64,6 +66,7 @@ pub const ElementType = union(enum) {
             u16 => .{ .UInt16 = null },
             u32 => .{ .UInt32 = null },
             u64 => .{ .UInt64 = null },
+            f16 => .{ .Float16 = null },
             f32 => .{ .Float32 = null },
             f64 => .{ .Float64 = null },
             f128 => .{ .Float128 = null },
@@ -84,6 +87,7 @@ pub const ElementType = union(enum) {
             .UInt16,
             .UInt32,
             .UInt64,
+            .Float16,
             .Float32,
             .Float64,
             .Float128,
@@ -112,6 +116,12 @@ pub const ElementType = union(enum) {
             // Floats: Usually best to generate between 0.0 and 1.0 for tests
             .Float32, .Float64, .Float128 => {
                 return rand.float(T);
+            },
+
+            .Float16 => {
+                // Zig doesn't have a built-in f16 random generator, so we can generate a f32 and then convert it.
+                const f32_val = rand.float(f32);
+                return @floatCast(f32_val);
             },
 
             // Complex Numbers: Randomize real and imaginary parts separately
@@ -155,6 +165,10 @@ pub const ElementType = union(enum) {
                 .little => "<u8",
                 .big => ">u8",
             } else "=u8",
+            .Float16 => |e| if (e) |endian| switch (endian) {
+                .little => "<f2",
+                .big => ">f2",
+            } else "=f2",
             .Float32 => |e| if (e) |endian| switch (endian) {
                 .little => "<f4",
                 .big => ">f4",
@@ -190,6 +204,7 @@ pub const ElementType = union(enum) {
             .UInt32 => @sizeOf(u32),
             .Int64 => @sizeOf(i64),
             .UInt64 => @sizeOf(u64),
+            .Float16 => @sizeOf(f16),
             .Float32 => @sizeOf(f32),
             .Float64 => @sizeOf(f64),
             .Float128 => @sizeOf(f128),
@@ -278,6 +293,7 @@ pub const ElementType = union(enum) {
                 switch (size_slice.len) {
                     1 => {
                         switch (size_slice[0]) {
+                            '2' => break :blk .{ .Float16 = endianness.Applicable },
                             '4' => break :blk .{ .Float32 = endianness.Applicable },
                             '8' => break :blk .{ .Float64 = endianness.Applicable },
                             else => return ParseDescrError.InvalidType,
@@ -377,6 +393,13 @@ test "parse unsigned integer dtypes" {
 }
 
 test "parse floating point dtypes" {
+    // Float16 (<f2, >f2)
+    const f16_little = try ElementType.fromString("<f2");
+    try std.testing.expectEqual(Endian.little, f16_little.Float16.?);
+
+    const f16_big = try ElementType.fromString(">f2");
+    try std.testing.expectEqual(Endian.big, f16_big.Float16.?);
+
     // Float32 (<f4, >f4)
     const f32_little = try ElementType.fromString("<f4");
     try std.testing.expectEqual(Endian.little, f32_little.Float32.?);
@@ -473,7 +496,7 @@ test "error on unsupported integer sizes" {
 }
 
 test "error on unsupported float sizes" {
-    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("<f2"));
+    try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("<f3"));
     try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString(">f12"));
     try std.testing.expectError(ParseDescrError.InvalidType, ElementType.fromString("=f32"));
 }

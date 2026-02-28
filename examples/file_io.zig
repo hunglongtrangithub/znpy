@@ -77,7 +77,7 @@ pub fn main() !void {
     try stdout.flush();
 
     // Clean up the temporary file
-    std.fs.cwd().deleteFile(temp_file_path) catch {};
+    try std.fs.cwd().deleteFile(temp_file_path);
 
     return;
 }
