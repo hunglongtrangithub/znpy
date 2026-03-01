@@ -66,13 +66,14 @@ pub const Range = struct {
     /// - end: `[-1, dim_size]`
     /// Return `null` when step is 0.
     /// Return value is a struct of (start, num_elements).
-    pub fn normalize(self: Self, dim_size: usize) ?struct { isize, usize } {
+    pub fn normalize(self: *const Self, dim_size: usize) ?struct { isize, usize } {
         // step must not be zero
         if (self.step == 0) {
             return null;
         }
 
         // dim_size must fit in isize
+        std.debug.assert(dim_size <= std.math.maxInt(isize));
         const n: isize = @intCast(dim_size);
 
         if (n == 0) {

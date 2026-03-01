@@ -37,7 +37,7 @@ pub fn StaticShape(comptime rank: usize) type {
             _ = shape_mod.shapeSizeChecked(descr, dims[0..]) orelse {
                 return InitError.ShapeSizeOverflow;
             };
-            const strides = computeStrides(dims, order);
+            const strides = computeStrides(&dims, order);
 
             std.debug.assert(strides.len == rank);
 
@@ -67,7 +67,7 @@ pub fn StaticShape(comptime rank: usize) type {
             _ = shape_mod.shapeSizeChecked(header.descr, dims[0..]) orelse {
                 return error.ShapeSizeOverflow;
             };
-            const strides = computeStrides(dims, header.order);
+            const strides = computeStrides(&dims, header.order);
 
             std.debug.assert(strides.len == rank);
 
@@ -96,7 +96,7 @@ pub fn StaticShape(comptime rank: usize) type {
         /// the offset calculation `Σ(indices[i] * strides[i])` is guaranteed to:
         /// 1. Be less than the total number of elements in the shape
         /// 2. Fit in isize without overflow
-        fn computeStrides(dims: [rank]usize, order: shape_mod.Order) [rank]isize {
+        fn computeStrides(dims: *const [rank]usize, order: shape_mod.Order) [rank]isize {
             var strides = [_]isize{0} ** rank;
 
             // Scalar case: no dimensions, no strides

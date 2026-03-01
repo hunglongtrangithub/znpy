@@ -15,7 +15,7 @@ const FormatConfig = struct {
 
     const Self = @This();
 
-    // NOTE: These constants are copied from Rust's ndarray. They can be adjusted later.
+    // These constants are copied from Rust's ndarray. They can be adjusted later.
 
     /// Default threshold, below this element count, we don't ellipsize
     const ARRAY_MANY_ELEMENT_LIMIT: usize = 500;
@@ -29,8 +29,8 @@ const FormatConfig = struct {
     const AXIS_LIMIT_ROW: usize = 11;
 
     /// Get the default format configuration
-    pub fn default() FormatConfig {
-        return FormatConfig{
+    pub fn default() Self {
+        return Self{
             .axis_collapse_limit = AXIS_LIMIT_STACKED,
             .axis_collapse_limit_next_last = AXIS_LIMIT_COL,
             .axis_collapse_limit_last = AXIS_LIMIT_ROW,
@@ -38,7 +38,7 @@ const FormatConfig = struct {
     }
 
     /// Get the collapse limit for the given axis index from the end.
-    pub fn collapseLimit(self: Self, axis_rindex: usize) usize {
+    pub fn collapseLimit(self: *const Self, axis_rindex: usize) usize {
         switch (axis_rindex) {
             0 => return self.axis_collapse_limit_last,
             1 => return self.axis_collapse_limit_next_last,

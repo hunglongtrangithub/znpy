@@ -615,7 +615,7 @@ pub fn ConstArrayView(comptime T: type) type {
         }
 
         /// Free the `dims` and `strides` slices allocated for this view.
-        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
+        pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
             allocator.free(self.dims);
             allocator.free(self.strides);
         }

@@ -91,7 +91,7 @@ pub fn DynamicArray(comptime T: type) type {
         }
 
         /// Deinitialize the array, freeing the data buffer and shape.
-        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
+        pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
             allocator.free(self.data_buffer);
             self.shape.deinit(allocator);
         }
@@ -99,7 +99,7 @@ pub fn DynamicArray(comptime T: type) type {
         /// Free only the shape metadata, not the data buffer.
         /// Use this for arrays created with `fromFileBuffer`
         /// where the buffer is externally managed.
-        pub fn deinitMetadata(self: Self, allocator: std.mem.Allocator) void {
+        pub fn deinitMetadata(self: *const Self, allocator: std.mem.Allocator) void {
             self.shape.deinit(allocator);
         }
 
@@ -306,12 +306,12 @@ pub fn ConstDynamicArray(comptime T: type) type {
         /// Free only the shape metadata, not the data buffer.
         /// Use this for arrays created with `fromFileBuffer`
         /// where the buffer is externally managed.
-        pub fn deinitMetadata(self: Self, allocator: std.mem.Allocator) void {
+        pub fn deinitMetadata(self: *const Self, allocator: std.mem.Allocator) void {
             self.shape.deinit(allocator);
         }
 
         /// Deallocate the array by deallocating the shape data and the data buffer.
-        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
+        pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
             self.shape.deinit(allocator);
             allocator.free(self.data_buffer);
         }
