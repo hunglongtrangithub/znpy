@@ -13,6 +13,7 @@ const native_endian = builtin.cpu.arch.endian();
 
 pub const FromFileBufferError = header_mod.ReadHeaderError || shape_mod.static.FromHeaderError || elements_mod.ViewDataError;
 pub const FromFileReaderError = header_mod.ReadHeaderError || shape_mod.static.FromHeaderError || elements_mod.ReadDataError;
+pub const InitError = shape_mod.static.InitError || std.mem.Allocator.Error;
 
 /// Generic function to create either a `StaticArray` or `ConstStaticArray` from a numpy file buffer,
 /// depending on the mutability of the input buffer.
@@ -72,8 +73,6 @@ pub fn StaticArray(
         data_buffer: []T,
 
         const Self = @This();
-
-        pub const InitError = shape_mod.static.InitError || std.mem.Allocator.Error;
 
         /// Initialize a new `StaticArray` with the given dimensions and order.
         /// A new data buffer will be allocated using the provided allocator.
