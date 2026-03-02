@@ -52,8 +52,8 @@ else
     }
 }
 
-/// A multi-dimensional array with dynamic rank that owns its data.
-/// This array owns the data buffer and will free it on deinit.
+/// A multi-dimensional array with dynamic rank.
+/// Owns the data buffer and shape (call `deinit` to free both).
 /// You can read and write elements through this array.
 ///
 /// `T` is the element type.
@@ -257,63 +257,31 @@ pub fn DynamicArray(comptime T: type) type {
     };
 }
 
-/// A view into a multi-dimensional array with dynamic rank.
-/// The view does not own the underlying data buffer.
+/// A view into an immutable, contiguous data buffer of a multi-dimensional array with dynamic rank.
+/// Owns the shape (call `deinit` to free).
+/// Does not own the data buffer.
 /// You can only read elements through this view.
 ///
 /// `T` is the element type.
 pub fn ConstDynamicArray(comptime T: type) type {
-    const element_type = elements_mod.ElementType.fromZigType(T) catch @compileError("Unsupported element type for ConstDynamicArray");
     return struct {
         /// The shape of the array (dimensions, strides, order)
         shape: shape_mod.DynamicShape,
-        /// The data buffer for memory management (allocation/deallocation)
+        /// The data buffer (borrowed, not owned by this view)
         data_buffer: []const T,
 
         const Self = @This();
 
-        /// Initialize a new `ConstDynamicArray` with the given dimensions and order.
-        /// A new data buffer will be allocated using the provided allocator.
-        pub fn init(
-            dims: []const usize,
-            order: shape_mod.Order,
-            allocator: std.mem.Allocator,
-        ) InitError!Self {
-            const shape = try shape_mod.DynamicShape.init(
-                dims,
-                order,
-                element_type,
-                allocator,
-            );
-
-            // Allocate the data buffer
-            const data_buffer = try allocator.alloc(T, shape.numElements());
-
-            return Self{
-                .shape = shape,
-                .data_buffer = data_buffer,
-            };
-        }
-
         /// Create a `ConstDynamicArray` from a numpy file buffer.
         /// The returned array borrows the buffer's data; no copy is made.
-        /// Do not use `deinit` on the returned array, as it does not own the buffer,
-        /// but make sure to call `deinitMetadata` to free the shape when done.
+        /// Call `deinit` to free the shape metadata when done.
         pub fn fromFileBuffer(file_buffer: []const u8, allocator: std.mem.Allocator) FromFileBufferError!Self {
             return arrayFromFileBuffer(T, file_buffer, allocator);
         }
 
-        /// Free only the shape metadata, not the data buffer.
-        /// Use this for arrays created with `fromFileBuffer`
-        /// where the buffer is externally managed.
-        pub fn deinitMetadata(self: *const Self, allocator: std.mem.Allocator) void {
-            self.shape.deinit(allocator);
-        }
-
-        /// Deallocate the array by deallocating the shape data and the data buffer.
+        /// Free the shape metadata.
         pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
             self.shape.deinit(allocator);
-            allocator.free(self.data_buffer);
         }
 
         /// Create a const view of this array.
@@ -545,58 +513,6 @@ test "DynamicArray.init" {
     try std.testing.expectEqual(8, array3d.data_buffer.len);
 }
 
-test "ConstDynamicArray.init" {
-    const allocator = std.testing.allocator;
-
-    // Test 1D array
-    const ConstArray1D = ConstDynamicArray(f64);
-    const dims1d = [_]usize{5};
-    var array1d = try ConstArray1D.init(&dims1d, .C, allocator);
-    defer array1d.deinit(allocator);
-
-    try std.testing.expectEqual(5, array1d.shape.numElements());
-    try std.testing.expectEqualSlices(usize, &dims1d, array1d.shape.dims);
-    try std.testing.expect(array1d.shape.order == .C);
-    try std.testing.expectEqual(5, array1d.data_buffer.len);
-
-    // Test 2D array
-    const ConstArray2D = ConstDynamicArray(i32);
-    const dims2d = [_]usize{ 2, 3 };
-    var array2d = try ConstArray2D.init(&dims2d, .F, allocator);
-    defer array2d.deinit(allocator);
-
-    try std.testing.expectEqual(6, array2d.shape.numElements());
-    try std.testing.expectEqualSlices(usize, &dims2d, array2d.shape.dims);
-    try std.testing.expect(array2d.shape.order == .F);
-    try std.testing.expectEqual(6, array2d.data_buffer.len);
-}
-
-test "DynamicArray.deinit" {
-    const allocator = std.testing.allocator;
-
-    // Create an array
-    const Array = DynamicArray(f64);
-    const dims = [_]usize{ 2, 3 };
-    var array = try Array.init(&dims, .C, allocator);
-
-    // Deinit should not crash
-    array.deinit(allocator);
-}
-
-test "ConstDynamicArray.deinit" {
-    const allocator = std.testing.allocator;
-
-    // Create a const array using init
-    const ConstArray = ConstDynamicArray(f64);
-    const dims = [_]usize{ 2, 3 };
-    var array = try ConstArray.init(&dims, .C, allocator);
-
-    // Deinit should free both the data buffer and shape
-    array.deinit(allocator);
-
-    // After deinit, the array is freed, test passes if no crash
-}
-
 test "DynamicArray.deinitMetadata" {
     const allocator = std.testing.allocator;
 
@@ -620,7 +536,7 @@ test "DynamicArray.deinitMetadata" {
     allocator.free(array.data_buffer);
 }
 
-test "ConstDynamicArray.deinitMetadata" {
+test "ConstDynamicArray.deinit" {
     const allocator = std.testing.allocator;
 
     // Create a const array
@@ -639,8 +555,8 @@ test "ConstDynamicArray.deinitMetadata" {
         .data_buffer = &data,
     };
 
-    // Deinit metadata - should free shape but not touch data buffer
-    array.deinitMetadata(allocator);
+    // Deinit - should free shape but not touch data buffer
+    array.deinit(allocator);
 
     // Data buffer should still be accessible
     try std.testing.expectEqual(1.0, data[0]);

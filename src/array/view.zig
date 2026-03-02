@@ -84,8 +84,9 @@ test "strideOffset - empty array" {
     try std.testing.expectEqual(null, offset);
 }
 
-/// A mutable view into a multi-dimensional array.
-/// The view does NOT own the underlying data buffer or shape metadata.
+/// A view into a mutable potentially non-contiguous multi-dimensional array.
+/// Owns the dims and strides slices (call `deinit` to free).
+/// Does not own the underlying data buffer.
 /// You can read and write elements through this view.
 ///
 /// `T` is the element type.
@@ -527,8 +528,9 @@ test "ArrayView - slice mutability preserved" {
     try std.testing.expectEqual(@as(f32, 99.0), data[0]);
 }
 
-/// An immutable view into a multi-dimensional array.
-/// The view does NOT own the underlying data buffer or shape metadata.
+/// A view into an immutable potentially non-contiguous multi-dimensional array.
+/// Owns the dims and strides slices (call `deinit` to free).
+/// Does not own the underlying data buffer.
 /// You can only read elements through this view.
 ///
 /// `T` is the element type.

@@ -55,8 +55,9 @@ else
 }
 
 /// A multi-dimensional array with static rank.
-/// The view does not own the underlying data buffer.
-/// You can read and write elements through this view.
+/// Owns the data buffer (call `deinit` to free).
+/// Shape is static (no allocator required).
+/// You can read and write elements through this array.
 pub fn StaticArray(
     /// The element type.
     comptime T: type,
@@ -191,6 +192,14 @@ pub fn StaticArray(
             };
         }
 
+        /// Create a const array for immutable access.
+        pub fn asConst(self: *const Self) ConstStaticArray(T, rank) {
+            return .{
+                .shape = self.shape,
+                .data_buffer = self.data_buffer,
+            };
+        }
+
         /// Get a pointer to the element at the given multi-dimensional index.
         ///
         /// Returns:
@@ -257,8 +266,9 @@ pub fn StaticArray(
     };
 }
 
-/// A view into a multi-dimensional array with static rank.
-/// The view does not own the underlying data buffer.
+/// A view into an immutable, contiguous data buffer of a multi-dimensional array with static rank.
+/// Does not own the data buffer.
+/// Shape is static (no allocator required).
 /// You can only read elements through this view.
 pub fn ConstStaticArray(
     /// The element type.
@@ -723,4 +733,17 @@ test "StaticArray.set" {
     try std.testing.expectEqual(400, array.data_buffer[3]);
     try std.testing.expectEqual(500, array.data_buffer[4]);
     try std.testing.expectEqual(600, array.data_buffer[5]);
+}
+
+test "StaticArray.asConst" {
+    const allocator = std.testing.allocator;
+    const Array2D = StaticArray(i32, 2);
+    var array = try Array2D.init([_]usize{ 2, 3 }, .C, allocator);
+    defer array.deinit(allocator);
+    array.set([_]usize{ 0, 0 }, 42);
+    const const_array = array.asConst();
+    // Shape preserved
+    try std.testing.expectEqualSlices(usize, &array.shape.dims, &const_array.shape.dims);
+    // Data shared - modification visible through const array
+    try std.testing.expectEqual(@as(i32, 42), const_array.get([_]usize{ 0, 0 }).?);
 }
