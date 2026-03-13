@@ -40,9 +40,9 @@ fn testIO(
 
     // Fill array with values
     var prng = std.Random.DefaultPrng.init(42);
-    const rng = prng.random();
+    const random = prng.random();
     for (0..arr.data_buffer.len) |i| {
-        arr.data_buffer[i] = ElementType.randomValue(T, rng);
+        arr.data_buffer[i] = ElementType.randomValue(T, random);
     }
 
     var file_buffer: [1024]u8 = undefined;

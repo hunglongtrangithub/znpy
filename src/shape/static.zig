@@ -11,7 +11,10 @@ pub const FromHeaderError = error{
     DimensionMismatch,
 };
 
-pub const InitError = error{ShapeSizeOverflow};
+pub const InitError = error{
+    /// The total size of the shape overflows isize.
+    ShapeSizeOverflow
+};
 
 pub fn StaticShape(comptime rank: usize) type {
     // TODO: consider adding a check to reject ranks that are too large?
@@ -20,7 +23,9 @@ pub fn StaticShape(comptime rank: usize) type {
         /// The total number of elements is the product of all dimensions,
         /// which must not overflow `std.math.maxInt(isize)`.
         dims: [rank]usize,
-        /// The strides for indexing into the array
+        /// The strides for indexing into the array. Allocated with samelength as dims.
+        /// Type is `isize` for API consistency with `ArrayView` and `Slice`, which can have
+        /// negative strides for reversed slicing. In this struct, strides are always positive.
         strides: [rank]isize,
         /// The memory order of the array.
         order: shape_mod.Order,

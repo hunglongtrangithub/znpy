@@ -140,6 +140,20 @@ pub const Header = struct {
     const VersionProps = struct {
         header_size_type: HeaderSizeType,
         header_encoding: HeaderEncoding,
+
+        /// Construct a verion props instance from the version bytes.
+        /// Return `null` if version bytes are invalid.
+        pub fn fromVersionBytes(minor_version: u8, major_version: u8) ?@This() {
+            if (minor_version != 0) {
+                return null;
+            }
+            switch (major_version) {
+                1 => return .{ .header_size_type = .U16, .header_encoding = .Ascii },
+                2 => return .{ .header_size_type = .U32, .header_encoding = .Ascii },
+                3 => return .{ .header_size_type = .U32, .header_encoding = .Utf8 },
+                else => return null,
+            }
+        }
     };
 
     const Self = @This();
@@ -163,17 +177,8 @@ pub const Header = struct {
         const minor_version = eight_bytes[7];
 
         // Get version
-        const version_props: VersionProps = version: {
-            if (minor_version != 0) {
-                return ParseHeaderError.UnsupportedVersion;
-            }
-            switch (major_version) {
-                1 => break :version .{ .header_size_type = .U16, .header_encoding = .Ascii },
-                2 => break :version .{ .header_size_type = .U32, .header_encoding = .Ascii },
-                3 => break :version .{ .header_size_type = .U32, .header_encoding = .Utf8 },
-                else => return ParseHeaderError.UnsupportedVersion,
-            }
-        };
+        const version_props = VersionProps.fromVersionBytes(minor_version, major_version) orelse
+            return ParseHeaderError.UnsupportedVersion;
 
         // Read the header size in little-endian format and cast to usize
         const header_size: usize = header_size: switch (version_props.header_size_type) {
@@ -211,31 +216,22 @@ pub const Header = struct {
     /// The reader should be positioned at the start of the .npy file.
     /// On success, the reader stops right after the header content.
     pub fn fromReader(reader: *std.io.Reader, allocator: std.mem.Allocator) ReadHeaderError!Self {
-        var eight_byte_buffer: [8]u8 = undefined;
+        var eight_byte_buffer: [MAGIC.len + 2]u8 = undefined;
         reader.readSliceAll(eight_byte_buffer[0..]) catch {
             return ParseHeaderError.IoError;
         };
 
         // Check magic
-        if (!std.mem.eql(u8, eight_byte_buffer[0..6], MAGIC)) {
+        if (!std.mem.eql(u8, eight_byte_buffer[0..MAGIC.len], MAGIC)) {
             return ParseHeaderError.MagicMismatch;
         }
 
-        const major_version = eight_byte_buffer[6];
-        const minor_version = eight_byte_buffer[7];
+        const major_version = eight_byte_buffer[MAGIC.len];
+        const minor_version = eight_byte_buffer[MAGIC.len + 1];
 
         // Get version
-        const version_props: VersionProps = version: {
-            if (minor_version != 0) {
-                return ParseHeaderError.UnsupportedVersion;
-            }
-            switch (major_version) {
-                1 => break :version .{ .header_size_type = .U16, .header_encoding = .Ascii },
-                2 => break :version .{ .header_size_type = .U32, .header_encoding = .Ascii },
-                3 => break :version .{ .header_size_type = .U32, .header_encoding = .Utf8 },
-                else => return ParseHeaderError.UnsupportedVersion,
-            }
-        };
+        const version_props = VersionProps.fromVersionBytes(minor_version, major_version) orelse
+            return ParseHeaderError.UnsupportedVersion;
 
         // Read the header size in little-endian format and cast to usize
         const header_size: usize = header_size: switch (version_props.header_size_type) {

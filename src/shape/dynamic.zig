@@ -10,6 +10,8 @@ pub const DynamicShape = struct {
     /// which must not overflow `std.math.maxInt(isize)`.
     dims: []const usize,
     /// The strides for indexing into the array. Allocated with samelength as dims.
+    /// Type is `isize` for API consistency with `ArrayView` and `Slice`, which can have
+    /// negative strides for reversed slicing. In this struct, strides are always positive.
     strides: []const isize,
     /// The memory order of the array.
     order: shape_mod.Order,
@@ -27,7 +29,7 @@ pub const DynamicShape = struct {
     ) Error!Self {
         // Check that the shape length fits in isize
         _ = shape_mod.shapeSizeChecked(descr, dims) orelse {
-            return Error.ShapeSizeOverflow;
+            return error.ShapeSizeOverflow;
         };
         const strides = try computeStrides(dims, order, allocator);
 
@@ -52,7 +54,7 @@ pub const DynamicShape = struct {
         errdefer allocator.free(dims);
 
         // Check that the shape length fits in isize
-        _ = shape_mod.shapeSizeChecked(npy_header.descr, dims[0..]) orelse {
+        _ = shape_mod.shapeSizeChecked(npy_header.descr, dims) orelse {
             return error.ShapeSizeOverflow;
         };
         const strides = try computeStrides(dims, npy_header.order, allocator);
