@@ -94,7 +94,7 @@ const ParseHeaderError = error{
 pub const WriteHeaderError = error{
     /// The header is too large to be written in the .npy format.
     HeaderTooLarge,
-} || std.io.Writer.Error || std.mem.Allocator.Error;
+} || std.Io.Writer.Error || std.mem.Allocator.Error;
 
 /// A simple slice reader that tracks position without copying data.
 pub const SliceReader = struct {
@@ -212,10 +212,10 @@ pub const Header = struct {
         return Self.fromPythonString(trimmed_header, version_props.header_encoding, allocator);
     }
 
-    /// Reads and parses the header from a reader (`std.io.Reader`).
+    /// Reads and parses the header from a reader (`std.Io.Reader`).
     /// The reader should be positioned at the start of the .npy file.
     /// On success, the reader stops right after the header content.
-    pub fn fromReader(reader: *std.io.Reader, allocator: std.mem.Allocator) ReadHeaderError!Self {
+    pub fn fromReader(reader: *std.Io.Reader, allocator: std.mem.Allocator) ReadHeaderError!Self {
         var eight_byte_buffer: [MAGIC.len + 2]u8 = undefined;
         reader.readSliceAll(eight_byte_buffer[0..]) catch {
             return ParseHeaderError.IoError;
@@ -378,7 +378,7 @@ pub const Header = struct {
 
     pub fn writeAll(
         self: *const Self,
-        writer: *std.io.Writer,
+        writer: *std.Io.Writer,
         allocator: std.mem.Allocator,
     ) WriteHeaderError!void {
         const header_string = try self.toPythonString(allocator);

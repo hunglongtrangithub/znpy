@@ -196,14 +196,14 @@ pub fn ArrayView(comptime T: type) type {
         }
 
         /// Format the array view using the default formatter.
-        /// Intended to be used with `std.io.Writer.print`:
+        /// Intended to be used with `std.Io.Writer.print`:
         /// ```zig
         /// var stdout_buffer: [1024]u8 = undefined;
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
         /// ```
-        pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        pub fn format(self: *const Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
             const const_view = self.asConst();
             try format_mod.Formatter(T).print(&const_view, writer);
         }
@@ -623,14 +623,14 @@ pub fn ConstArrayView(comptime T: type) type {
         }
 
         /// Format the array view using the default formatter.
-        /// Intended to be used with `std.io.Writer.print`:
+        /// Intended to be used with `std.Io.Writer.print`:
         /// ```zig
         /// var stdout_buffer: [1024]u8 = undefined;
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
         /// ```
-        pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        pub fn format(self: *const Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
             try format_mod.Formatter(T).print(self, writer);
         }
     };

@@ -53,7 +53,7 @@ pub fn Formatter(comptime T: type) type {
 
     return struct {
         /// The writer to output to
-        writer: *std.io.Writer,
+        writer: *std.Io.Writer,
         /// The format configuration
         fmt_cfg: FormatConfig,
         /// The total rank of the array being printed
@@ -68,8 +68,8 @@ pub fn Formatter(comptime T: type) type {
         /// Entry point to print the given array view
         pub fn print(
             array: *const ConstArrayView(T),
-            writer: *std.io.Writer,
-        ) std.io.Writer.Error!void {
+            writer: *std.Io.Writer,
+        ) std.Io.Writer.Error!void {
             const fmt_cfg = FormatConfig.default();
             var formatter = Self{
                 .writer = writer,
@@ -81,7 +81,7 @@ pub fn Formatter(comptime T: type) type {
         }
 
         /// Internal recursive function to print the array view
-        fn printArrayInner(self: *Self, array_view: *const ConstArrayView(T)) std.io.Writer.Error!void {
+        fn printArrayInner(self: *Self, array_view: *const ConstArrayView(T)) std.Io.Writer.Error!void {
             const current_rank = array_view.dims.len;
 
             // Check if array is empty
@@ -133,7 +133,7 @@ pub fn Formatter(comptime T: type) type {
         fn printScalar(
             self: *Self,
             scalar: T,
-        ) std.io.Writer.Error!void {
+        ) std.Io.Writer.Error!void {
             switch (element_type) {
                 .Bool => {
                     const bool_value = scalar != 0;
@@ -163,7 +163,7 @@ pub fn Formatter(comptime T: type) type {
         fn printSeparator(
             self: *Self,
             current_rank: usize,
-        ) std.io.Writer.Error!void {
+        ) std.Io.Writer.Error!void {
             std.debug.assert(current_rank > 0);
 
             if (current_rank == 1) {
@@ -185,7 +185,7 @@ pub fn Formatter(comptime T: type) type {
             self: *Self,
             array_view: *const ConstArrayView(T),
             elem_idx: usize,
-        ) std.io.Writer.Error!void {
+        ) std.Io.Writer.Error!void {
             std.debug.assert(array_view.dims.len == 1);
             std.debug.assert(elem_idx < array_view.dims[0]);
             try self.printScalar(array_view.atUnchecked(&[_]usize{elem_idx}).*);
@@ -195,7 +195,7 @@ pub fn Formatter(comptime T: type) type {
             self: *Self,
             array_view: *const ConstArrayView(T),
             elem_idx: usize,
-        ) std.io.Writer.Error!void {
+        ) std.Io.Writer.Error!void {
             std.debug.assert(array_view.dims.len >= 2);
             std.debug.assert(elem_idx < array_view.dims[0]);
 
@@ -226,9 +226,9 @@ pub fn Formatter(comptime T: type) type {
             self: *Self,
             array_view: *const ConstArrayView(T),
             limit: usize,
-            print_sep: fn (self: *Self, current_rank: usize) std.io.Writer.Error!void,
-            print_elem: fn (self: *Self, array_view: *const ConstArrayView(T), index: usize) std.io.Writer.Error!void,
-        ) std.io.Writer.Error!void {
+            print_sep: fn (self: *Self, current_rank: usize) std.Io.Writer.Error!void,
+            print_elem: fn (self: *Self, array_view: *const ConstArrayView(T), index: usize) std.Io.Writer.Error!void,
+        ) std.Io.Writer.Error!void {
             const dim_size = array_view.dims[0];
             if (dim_size == 0) {
                 return;

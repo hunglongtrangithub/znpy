@@ -112,7 +112,7 @@ pub fn DynamicArray(comptime T: type) type {
         }
 
         /// Create a `DynamicArray` by reading from a file reader in numpy file format.
-        pub fn fromFileAlloc(file_reader: *std.io.Reader, allocator: std.mem.Allocator) FromFileReaderError!Self {
+        pub fn fromFileAlloc(file_reader: *std.Io.Reader, allocator: std.mem.Allocator) FromFileReaderError!Self {
             const header = try header_mod.Header.fromReader(file_reader, allocator);
             defer header.deinit(allocator);
             const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
@@ -135,7 +135,7 @@ pub fn DynamicArray(comptime T: type) type {
         /// Same as `fromFileAlloc`, but ensures the data buffer is aligned to the specified byte alignment.
         /// Can be used when SIMD operations require specific alignment.
         pub fn fromFileAllocAligned(
-            file_reader: *std.io.Reader,
+            file_reader: *std.Io.Reader,
             comptime alignment: std.mem.Alignment,
             allocator: std.mem.Allocator,
         ) FromFileReaderError!Self {
@@ -167,7 +167,7 @@ pub fn DynamicArray(comptime T: type) type {
         /// Write the array (both header and array data) to a writer in numpy file format.
         pub fn writeAll(
             self: *const Self,
-            writer: *std.io.Writer,
+            writer: *std.Io.Writer,
             allocator: std.mem.Allocator,
         ) header_mod.WriteHeaderError!void {
             const header = header_mod.Header{
@@ -243,14 +243,14 @@ pub fn DynamicArray(comptime T: type) type {
         }
 
         /// Format the array view using the default formatter.
-        /// Intended to be used with `std.io.Writer.print`:
+        /// Intended to be used with `std.Io.Writer.print`:
         /// ```zig
         /// var stdout_buffer: [1024]u8 = undefined;
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
         /// ```
-        pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        pub fn format(self: *const Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
             const view = self.asView().asConst();
             try view.format(writer);
         }
@@ -339,14 +339,14 @@ pub fn ConstDynamicArray(comptime T: type) type {
         }
 
         /// Format the array view using the default formatter.
-        /// Intended to be used with `std.io.Writer.print`:
+        /// Intended to be used with `std.Io.Writer.print`:
         /// ```zig
         /// var stdout_buffer: [1024]u8 = undefined;
         /// var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         /// const stdout = &stdout_writer.interface;
         /// try stdout.print("Array:\n{f}\n", .{array});
         /// ```
-        pub fn format(self: *const Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        pub fn format(self: *const Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
             const view = self.asView();
             try view.format(writer);
         }

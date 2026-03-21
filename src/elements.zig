@@ -33,7 +33,7 @@ pub const DataLayoutError = error{
 
 pub const ViewDataError = TypeCompatibilityError || DataLayoutError;
 
-pub const ReadDataError = TypeCompatibilityError || std.io.Reader.Error;
+pub const ReadDataError = TypeCompatibilityError || std.Io.Reader.Error;
 
 /// A generic element type representing a single element of type `T` in a numpy array.
 pub fn Element(comptime T: type) type {
@@ -146,7 +146,7 @@ pub fn Element(comptime T: type) type {
 
         /// Reads data from a reader into the provided slice of type `T`.
         /// Performs type compatibility check. If endianness mismatch is detected, byte swapping is performed.
-        pub fn readSlice(slice: []T, reader: *std.io.Reader, type_descr: ElementType) ReadDataError!void {
+        pub fn readSlice(slice: []T, reader: *std.Io.Reader, type_descr: ElementType) ReadDataError!void {
             // Check type match
             if (std.meta.activeTag(type_descr) != std.meta.activeTag(element_type)) {
                 return TypeCompatibilityError.TypeMismatch;
