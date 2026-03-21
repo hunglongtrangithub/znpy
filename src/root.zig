@@ -47,10 +47,12 @@ fn testIO(
 
     var file_buffer: [1024]u8 = undefined;
     const temp_file_path = "temp.npy";
+    var temp_dir = std.testing.tmpDir(.{});
+    defer temp_dir.cleanup();
 
     // Write to disk
     {
-        const temp_file = try std.fs.cwd().createFile(temp_file_path, .{});
+        const temp_file = try temp_dir.dir.createFile(temp_file_path, .{});
         defer temp_file.close();
 
         var file_writer = std.fs.File.Writer.init(temp_file, &file_buffer);
@@ -59,15 +61,12 @@ fn testIO(
     }
 
     // Read from disk
-    const temp_file = try std.fs.cwd().openFile(temp_file_path, .{});
+    const temp_file = try temp_dir.dir.openFile(temp_file_path, .{});
     defer temp_file.close();
 
     var temp_file_reader = std.fs.File.Reader.init(temp_file, &file_buffer);
     const arr2 = try array.DynamicArray(T).fromFileAlloc(&temp_file_reader.interface, allocator);
     defer arr2.deinit(allocator);
-
-    // Delete the temporary file
-    try std.fs.cwd().deleteFile(temp_file_path);
 
     // Assertions
     try std.testing.expectEqualSlices(T, arr.data_buffer, arr2.data_buffer);
