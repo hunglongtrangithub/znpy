@@ -59,8 +59,6 @@ const HeaderSizeType = enum {
 };
 
 const ParseHeaderError = error{
-    /// Error reading from file, due to I/O issues (unexpected end-of-file/sequence or read failure).
-    IoError,
     /// Magic sequence does not match the expected value.
     MagicMismatch,
     /// The format version is unsupported.
@@ -105,7 +103,7 @@ pub const SliceReader = struct {
 
     const Self = @This();
 
-    pub const Error = error{NotEnoughBytes};
+    pub const Error = error{EndOfStream};
 
     /// Initialize the slice reader with position 0.
     pub fn init(slice: []const u8) Self {
@@ -113,11 +111,11 @@ pub const SliceReader = struct {
     }
 
     /// Returns the next n bytes as a slice without copying.
-    /// Returns error.NotEnoughBytes if there aren't enough bytes remaining.
+    /// Returns `error.EndOfStream` if there aren't enough bytes remaining.
     pub fn readBytes(self: *Self, n: usize) Error![]const u8 {
         const remaining = self.slice.len - self.pos;
         if (n > remaining) {
-            return Error.NotEnoughBytes;
+            return Error.EndOfStream;
         }
         const result = self.slice[self.pos..][0..n];
         self.pos += n;
@@ -125,7 +123,7 @@ pub const SliceReader = struct {
     }
 };
 
-pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error;
+pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error || std.io.Reader.Error;
 
 /// Represents the parsed header information from a .npy file.
 pub const Header = struct {
@@ -164,9 +162,7 @@ pub const Header = struct {
     /// Returns the parsed header and advances the slice reader position.
     /// This function uses the slice reader to avoid unnecessary copies, unlike `Header.fromReader`.
     pub fn fromSliceReader(slice_reader: *SliceReader, allocator: std.mem.Allocator) ReadHeaderError!Self {
-        const eight_bytes = slice_reader.readBytes(8) catch {
-            return ParseHeaderError.IoError;
-        };
+        const eight_bytes = try slice_reader.readBytes(8);
 
         // Check magic
         if (!std.mem.eql(u8, eight_bytes[0..6], MAGIC)) {
@@ -183,25 +179,19 @@ pub const Header = struct {
         // Read the header size in little-endian format and cast to usize
         const header_size: usize = header_size: switch (version_props.header_size_type) {
             .U16 => {
-                const size_bytes = slice_reader.readBytes(2) catch {
-                    return ParseHeaderError.IoError;
-                };
+                const size_bytes = try slice_reader.readBytes(2);
                 const size = std.mem.readInt(u16, size_bytes[0..2], .little);
                 break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderSizeOverflow;
             },
             .U32 => {
-                const size_bytes = slice_reader.readBytes(4) catch {
-                    return ParseHeaderError.IoError;
-                };
+                const size_bytes = try slice_reader.readBytes(4);
                 const size = std.mem.readInt(u32, size_bytes[0..4], .little);
                 break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderSizeOverflow;
             },
         };
 
         // Read the header content without copying
-        const header_buffer = slice_reader.readBytes(header_size) catch {
-            return ParseHeaderError.IoError;
-        };
+        const header_buffer = try slice_reader.readBytes(header_size);
 
         // Check for ending newline
         if (header_buffer.len == 0 or header_buffer[header_buffer.len - 1] != '\n') {
@@ -217,9 +207,7 @@ pub const Header = struct {
     /// On success, the reader stops right after the header content.
     pub fn fromReader(reader: *std.Io.Reader, allocator: std.mem.Allocator) ReadHeaderError!Self {
         var eight_byte_buffer: [MAGIC.len + 2]u8 = undefined;
-        reader.readSliceAll(eight_byte_buffer[0..]) catch {
-            return ParseHeaderError.IoError;
-        };
+        try reader.readSliceAll(eight_byte_buffer[0..]);
 
         // Check magic
         if (!std.mem.eql(u8, eight_byte_buffer[0..MAGIC.len], MAGIC)) {
@@ -237,17 +225,13 @@ pub const Header = struct {
         const header_size: usize = header_size: switch (version_props.header_size_type) {
             .U16 => {
                 var size_buffer: [2]u8 = undefined;
-                reader.readSliceAll(size_buffer[0..]) catch {
-                    return ParseHeaderError.IoError;
-                };
+                try reader.readSliceAll(size_buffer[0..]);
                 const size = std.mem.readInt(u16, &size_buffer, .little);
                 break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderSizeOverflow;
             },
             .U32 => {
                 var size_buffer: [4]u8 = undefined;
-                reader.readSliceAll(size_buffer[0..]) catch {
-                    return ParseHeaderError.IoError;
-                };
+                try reader.readSliceAll(size_buffer[0..]);
                 const size = std.mem.readInt(u32, &size_buffer, .little);
                 break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderSizeOverflow;
             },
@@ -257,9 +241,7 @@ pub const Header = struct {
         const header_buffer = try allocator.alloc(u8, header_size);
         defer allocator.free(header_buffer);
 
-        reader.readSliceAll(header_buffer) catch {
-            return ParseHeaderError.IoError;
-        };
+        try reader.readSliceAll(header_buffer);
 
         // Check for ending newline
         if (header_buffer.len == 0 or header_buffer[header_buffer.len - 1] != '\n') {
