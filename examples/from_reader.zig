@@ -2,12 +2,11 @@ const std = @import("std");
 
 const znpy = @import("znpy");
 
-const dirname = std.fs.path.dirname;
-var stdout_buffer: [1024]u8 = undefined;
-var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-const stdout = &stdout_writer.interface;
-
 pub fn main() !void {
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
     const npy_file_path = "./test-data/shapes/f32_2d_4x5.npy";
     try stdout.print("Loading NPY file from path: {s}\n", .{npy_file_path});
     try stdout.flush();

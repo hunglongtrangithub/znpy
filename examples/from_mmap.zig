@@ -1,13 +1,17 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const znpy = @import("znpy");
 
-const dirname = std.fs.path.dirname;
-var stdout_buffer: [1024]u8 = undefined;
-var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-const stdout = &stdout_writer.interface;
-
 pub fn main() !void {
+    if (builtin.os.tag != .linux) {
+        std.debug.print("Memory mapping is for Linux only.\n", .{});
+        return;
+    }
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
     const npy_file_path = "./test-data/shapes/f64_1d_large.npy";
     try stdout.print("Loading NPY file from path: {s}\n", .{npy_file_path});
     try stdout.flush();

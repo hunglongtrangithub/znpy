@@ -2,12 +2,7 @@ const std = @import("std");
 
 const znpy = @import("znpy");
 
-const dirname = std.fs.path.dirname;
-var stdout_buffer: [1024]u8 = undefined;
-var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-const stdout = &stdout_writer.interface;
-
-pub fn process2df32file(npy_file_path: []const u8) !void {
+pub fn process2df32file(npy_file_path: []const u8, stdout: *std.Io.Writer) !void {
     try stdout.print("Loading NPY file from path: {s}\n", .{npy_file_path});
     try stdout.flush();
 
@@ -55,11 +50,15 @@ pub fn process2df32file(npy_file_path: []const u8) !void {
 }
 
 pub fn main() !void {
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
     const big_endian_file_path = "./test-data/endian/f32_2d_big.npy";
     try stdout.print("Big endian example:\n", .{});
-    try process2df32file(big_endian_file_path);
+    try process2df32file(big_endian_file_path, stdout);
 
     const little_endian_file_path = "./test-data/endian/f32_2d_little.npy";
     try stdout.print("\nLittle endian example:\n", .{});
-    try process2df32file(little_endian_file_path);
+    try process2df32file(little_endian_file_path, stdout);
 }
