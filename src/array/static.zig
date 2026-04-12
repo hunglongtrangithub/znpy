@@ -5,7 +5,7 @@ const header_mod = @import("../header.zig");
 const shape_mod = @import("../shape.zig");
 const elements_mod = @import("../elements.zig");
 const array_mod = @import("../array.zig");
-const view_mod = @import("./view.zig");
+const view_mod = @import("view.zig");
 const slice_mod = @import("../slice.zig");
 const pointer_mod = @import("../pointer.zig");
 

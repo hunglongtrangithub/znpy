@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const slice_mod = @import("../slice.zig");
-const range_mod = @import("./range.zig");
+const range_mod = @import("range.zig");
 
 const Slice = slice_mod.Slice;
 const All = slice_mod.All;

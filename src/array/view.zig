@@ -2,7 +2,7 @@ const std = @import("std");
 
 const pointer_mod = @import("../pointer.zig");
 const slice_mod = @import("../slice.zig");
-const format_mod = @import("./format.zig");
+const format_mod = @import("format.zig");
 
 /// Compute the flat array offset for a given multi-dimensional index.
 /// Returns:

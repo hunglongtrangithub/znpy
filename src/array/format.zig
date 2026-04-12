@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const view_mod = @import("./view.zig");
+const view_mod = @import("view.zig");
 const slice_mod = @import("../slice.zig");
 const elements_mod = @import("../elements.zig");
 const array_mod = @import("../array.zig");

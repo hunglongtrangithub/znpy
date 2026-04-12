@@ -4,8 +4,8 @@ const builtin = @import("builtin");
 
 const boolean = @import("elements/boolean.zig");
 const types = @import("elements/types.zig");
-const array = @import("./array.zig");
-const pointer = @import("./pointer.zig");
+const array = @import("array.zig");
+const pointer = @import("pointer.zig");
 
 const native_endian = builtin.cpu.arch.endian();
 
