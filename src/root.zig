@@ -52,19 +52,19 @@ fn testIO(
 
     // Write to disk
     {
-        const temp_file = try temp_dir.dir.createFile(temp_file_path, .{});
-        defer temp_file.close();
+        const temp_file = try temp_dir.dir.createFile(std.testing.io, temp_file_path, .{});
+        defer temp_file.close(std.testing.io);
 
-        var file_writer = std.fs.File.Writer.init(temp_file, &file_buffer);
+        var file_writer = std.Io.File.Writer.init(temp_file, std.testing.io, &file_buffer);
         try arr.writeAll(&file_writer.interface, allocator);
         try file_writer.interface.flush();
     }
 
     // Read from disk
-    const temp_file = try temp_dir.dir.openFile(temp_file_path, .{});
-    defer temp_file.close();
+    const temp_file = try temp_dir.dir.openFile(std.testing.io, temp_file_path, .{});
+    defer temp_file.close(std.testing.io);
 
-    var temp_file_reader = std.fs.File.Reader.init(temp_file, &file_buffer);
+    var temp_file_reader = std.Io.File.Reader.init(temp_file, std.testing.io, &file_buffer);
     const arr2 = try array.DynamicArray(T).fromFileAlloc(&temp_file_reader.interface, allocator);
     defer arr2.deinit(allocator);
 

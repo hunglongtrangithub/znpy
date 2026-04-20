@@ -3,30 +3,34 @@ const builtin = @import("builtin");
 
 const znpy = @import("znpy");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     if (builtin.os.tag != .linux) {
         std.debug.print("Memory mapping is for Linux only.\n", .{});
         return;
     }
+
+    const io = init.io;
+    const gpa = init.gpa;
+
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writerStreaming(io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     const npy_file_path = "./test-data/shapes/f64_1d_large.npy";
     try stdout.print("Loading NPY file from path: {s}\n", .{npy_file_path});
     try stdout.flush();
 
-    var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
+    var fallback = std.heap.stackFallback(1024, gpa);
     const allocator = fallback.get();
 
-    const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
+    const file = std.Io.Dir.cwd().openFile(io, npy_file_path, .{ .mode = .read_only }) catch |e| {
         std.debug.print("Failed to open file: {}\n", .{e});
         return;
     };
-    defer file.close();
+    defer file.close(io);
 
     // Get file size
-    const file_stat = try file.stat();
+    const file_stat = try file.stat(io);
     const read_size = std.math.cast(usize, file_stat.size) orelse {
         std.debug.print("File size is too large to map\n", .{});
         return;
@@ -40,7 +44,7 @@ pub fn main() !void {
     const file_buffer = try std.posix.mmap(
         null,
         read_size,
-        std.posix.PROT.READ,
+        std.posix.PROT{ .READ = true },
         std.posix.system.MAP{ .TYPE = .PRIVATE },
         file.handle,
         0,

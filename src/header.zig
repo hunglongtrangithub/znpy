@@ -123,7 +123,7 @@ pub const SliceReader = struct {
     }
 };
 
-pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error || std.io.Reader.Error;
+pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error || std.Io.Reader.Error;
 
 /// Represents the parsed header information from a .npy file.
 pub const Header = struct {
@@ -198,7 +198,7 @@ pub const Header = struct {
             return ParseHeaderError.MissingNewline;
         }
         // Trim newline and spaces right before it
-        const trimmed_header = std.mem.trimRight(u8, header_buffer[0 .. header_buffer.len - 1], " ");
+        const trimmed_header = std.mem.trimEnd(u8, header_buffer[0 .. header_buffer.len - 1], " ");
         return Self.fromPythonString(trimmed_header, version_props.header_encoding, allocator);
     }
 
@@ -248,7 +248,7 @@ pub const Header = struct {
             return ParseHeaderError.MissingNewline;
         }
         // Trim newline and spaces right before it
-        const trimmed_header = std.mem.trimRight(u8, header_buffer[0 .. header_buffer.len - 1], " ");
+        const trimmed_header = std.mem.trimEnd(u8, header_buffer[0 .. header_buffer.len - 1], " ");
         return Self.fromPythonString(trimmed_header, version_props.header_encoding, allocator);
     }
 

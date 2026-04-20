@@ -2,28 +2,31 @@ const std = @import("std");
 
 const znpy = @import("znpy");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const gpa = init.gpa;
+
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writerStreaming(io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     const npy_file_path = "./test-data/shapes/f32_2d_4x5.npy";
     try stdout.print("Loading NPY file from path: {s}\n", .{npy_file_path});
     try stdout.flush();
 
-    var fallback = std.heap.stackFallback(1024, std.heap.page_allocator);
+    var fallback = std.heap.stackFallback(1024, gpa);
     const allocator = fallback.get();
 
-    const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
+    const file = std.Io.Dir.cwd().openFile(io, npy_file_path, .{ .mode = .read_only }) catch |e| {
         std.debug.print("Failed to open file: {}\n", .{e});
         return;
     };
-    defer file.close();
+    defer file.close(io);
 
     const Array = znpy.array.StaticArray(f32, 2);
 
     var file_buffer: [1024]u8 = undefined;
-    var file_reader = std.fs.File.Reader.init(file, &file_buffer);
+    var file_reader = std.Io.File.Reader.init(file, io, &file_buffer);
     const array = try Array.fromFileAlloc(&file_reader.interface, allocator);
     defer array.deinit(allocator);
 

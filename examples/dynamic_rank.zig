@@ -1,24 +1,23 @@
 const std = @import("std");
 const znpy = @import("znpy");
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+    const io = init.io;
 
     // Load data from a file using DynamicArray
     const npy_file_path = "./test-data/shapes/f32_2d_4x5.npy";
     std.debug.print("Loading NPY file from path: {s}\n", .{npy_file_path});
 
-    const file = std.fs.cwd().openFile(npy_file_path, .{ .mode = .read_only }) catch |e| {
+    const file = std.Io.Dir.cwd().openFile(io, npy_file_path, .{ .mode = .read_only }) catch |e| {
         std.debug.print("Failed to open file: {}\n", .{e});
         return;
     };
-    defer file.close();
+    defer file.close(io);
 
     const Array = znpy.array.DynamicArray(f32);
     var read_buffer: [1024]u8 = undefined;
-    var file_reader = std.fs.File.Reader.init(file, &read_buffer);
+    var file_reader = std.Io.File.Reader.init(file, io, &read_buffer);
     const arr = try Array.fromFileAlloc(&file_reader.interface, allocator);
     defer arr.deinit(allocator);
 
