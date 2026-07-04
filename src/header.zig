@@ -94,35 +94,6 @@ pub const WriteHeaderError = error{
     HeaderTooLarge,
 } || std.Io.Writer.Error || std.mem.Allocator.Error;
 
-/// A simple slice reader that tracks position without copying data.
-pub const SliceReader = struct {
-    /// The underlying byte slice to read from (owned by caller).
-    slice: []const u8,
-    /// Current read position within the slice.
-    pos: usize = 0,
-
-    const Self = @This();
-
-    pub const Error = error{EndOfStream};
-
-    /// Initialize the slice reader with position 0.
-    pub fn init(slice: []const u8) Self {
-        return .{ .slice = slice, .pos = 0 };
-    }
-
-    /// Returns the next n bytes as a slice without copying.
-    /// Returns `error.EndOfStream` if there aren't enough bytes remaining.
-    pub fn readBytes(self: *Self, n: usize) Error![]const u8 {
-        const remaining = self.slice.len - self.pos;
-        if (n > remaining) {
-            return Error.EndOfStream;
-        }
-        const result = self.slice[self.pos..][0..n];
-        self.pos += n;
-        return result;
-    }
-};
-
 pub const ReadHeaderError = ParseHeaderError || std.mem.Allocator.Error || std.Io.Reader.Error;
 
 /// Represents the parsed header information from a .npy file.
@@ -157,50 +128,6 @@ pub const Header = struct {
     const Self = @This();
 
     const MAGIC = "\x93NUMPY";
-
-    /// Reads and parses the header from a slice reader (`SliceReader`).
-    /// Returns the parsed header and advances the slice reader position.
-    /// This function uses the slice reader to avoid unnecessary copies, unlike `Header.fromReader`.
-    pub fn fromSliceReader(slice_reader: *SliceReader, allocator: std.mem.Allocator) ReadHeaderError!Self {
-        const eight_bytes = try slice_reader.readBytes(8);
-
-        // Check magic
-        if (!std.mem.eql(u8, eight_bytes[0..6], MAGIC)) {
-            return ParseHeaderError.MagicMismatch;
-        }
-
-        const major_version = eight_bytes[6];
-        const minor_version = eight_bytes[7];
-
-        // Get version
-        const version_props = VersionProps.fromVersionBytes(minor_version, major_version) orelse
-            return ParseHeaderError.UnsupportedVersion;
-
-        // Read the header size in little-endian format and cast to usize
-        const header_size: usize = header_size: switch (version_props.header_size_type) {
-            .U16 => {
-                const size_bytes = try slice_reader.readBytes(2);
-                const size = std.mem.readInt(u16, size_bytes[0..2], .little);
-                break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderSizeOverflow;
-            },
-            .U32 => {
-                const size_bytes = try slice_reader.readBytes(4);
-                const size = std.mem.readInt(u32, size_bytes[0..4], .little);
-                break :header_size std.math.cast(usize, size) orelse return ParseHeaderError.HeaderSizeOverflow;
-            },
-        };
-
-        // Read the header content without copying
-        const header_buffer = try slice_reader.readBytes(header_size);
-
-        // Check for ending newline
-        if (header_buffer.len == 0 or header_buffer[header_buffer.len - 1] != '\n') {
-            return ParseHeaderError.MissingNewline;
-        }
-        // Trim newline and spaces right before it
-        const trimmed_header = std.mem.trimEnd(u8, header_buffer[0 .. header_buffer.len - 1], " ");
-        return Self.fromPythonString(trimmed_header, version_props.header_encoding, allocator);
-    }
 
     /// Reads and parses the header from a reader (`std.Io.Reader`).
     /// The reader should be positioned at the start of the .npy file.

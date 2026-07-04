@@ -25,12 +25,12 @@ fn arrayFromFileBuffer(
     ConstDynamicArray(T)
 else
     DynamicArray(T) {
-    var slice_reader = header_mod.SliceReader.init(file_buffer);
+    var reader: std.Io.Reader = .fixed(file_buffer);
 
-    const header = try header_mod.Header.fromSliceReader(&slice_reader, allocator);
+    const header = try header_mod.Header.fromReader(&reader, allocator);
     defer header.deinit(allocator);
 
-    const byte_buffer = file_buffer[slice_reader.pos..];
+    const byte_buffer = file_buffer[reader.seek..];
     const shape = try shape_mod.DynamicShape.fromHeader(header, allocator);
 
     const data_buffer = try elements_mod.Element(T).bytesAsSlice(
@@ -683,6 +683,59 @@ test "DynamicArray.slice" {
     try std.testing.expectEqual(2, sliced.dims[0]);
     try std.testing.expectEqual(20, sliced.get(&[_]usize{0}));
     try std.testing.expectEqual(50, sliced.get(&[_]usize{1}));
+}
+
+test "DynamicArray.fromFileBuffer - i32 1D from mutable buffer" {
+    const allocator = std.testing.allocator;
+
+    const ArrayType = DynamicArray(i32);
+    const embedded = @embedFile("test-arrays/i32_1d_small.npy");
+    var buf: [embedded.len]u8 align(@alignOf(i32)) = embedded.*;
+
+    var array = try ArrayType.fromFileBuffer(buf[0..], allocator);
+    defer array.deinitMetadata(allocator);
+
+    try std.testing.expectEqualSlices(usize, &[_]usize{3}, array.shape.dims);
+    try std.testing.expectEqual(@as(usize, 3), array.data_buffer.len);
+    try std.testing.expectEqual(@as(i32, 1), array.data_buffer[0]);
+    try std.testing.expectEqual(@as(i32, 2), array.data_buffer[1]);
+    try std.testing.expectEqual(@as(i32, 3), array.data_buffer[2]);
+    try std.testing.expect(array.shape.order == .C);
+}
+
+test "ConstDynamicArray.fromFileBuffer - f64 2D 1x1 from const buffer" {
+    const allocator = std.testing.allocator;
+
+    const ArrayType = ConstDynamicArray(f64);
+    const embedded = @embedFile("test-arrays/f64_2d_1x1.npy");
+    const buf: [embedded.len]u8 align(@alignOf(f64)) = embedded.*;
+
+    var array = try ArrayType.fromFileBuffer(buf[0..], allocator);
+    defer array.deinit(allocator);
+
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 1, 1 }, array.shape.dims);
+    try std.testing.expectEqual(@as(usize, 1), array.data_buffer.len);
+    try std.testing.expectEqual(@as(f64, 42.0), array.data_buffer[0]);
+    try std.testing.expect(array.shape.order == .C);
+}
+
+test "DynamicArray.fromFileBuffer - f64 2D Fortran order from mutable buffer" {
+    const allocator = std.testing.allocator;
+
+    const ArrayType = DynamicArray(f64);
+    const embedded = @embedFile("test-arrays/f64_2d_fortran.npy");
+    var buf: [embedded.len]u8 align(@alignOf(f64)) = embedded.*;
+
+    var array = try ArrayType.fromFileBuffer(buf[0..], allocator);
+    defer array.deinitMetadata(allocator);
+
+    try std.testing.expectEqualSlices(usize, &[_]usize{ 2, 4 }, array.shape.dims);
+    try std.testing.expectEqual(@as(usize, 8), array.data_buffer.len);
+    try std.testing.expect(array.shape.order == .F);
+    try std.testing.expectEqual(@as(f64, 1.0), array.data_buffer[0]);
+    try std.testing.expectEqual(@as(f64, 5.0), array.data_buffer[1]);
+    try std.testing.expectEqual(@as(f64, 2.0), array.data_buffer[2]);
+    try std.testing.expectEqual(@as(f64, 8.0), array.data_buffer[7]);
 }
 
 test "ConstDynamicArray.slice" {

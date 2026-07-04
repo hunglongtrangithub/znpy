@@ -17,13 +17,17 @@ In my recent project that involves working with large vector datasets, our old c
 
 Make sure [Zig 0.16](https://ziglang.org/download/) is installed.
 
-Run demos:
+Run a demo:
 
 ```sh
 zig build demo_<demo_name>
 ```
 
-Where `<demo_name>` is the name of a file in `examples/` without the `.zig` extension (e.g., `zig build demo_endian`).
+Where `<demo_name>` is the name of a file in `examples/` without the `.zig` extension (e.g., `zig build demo_endian`). To run all demos:
+
+```sh
+zig build demo
+```
 
 Run tests:
 

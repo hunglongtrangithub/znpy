@@ -13,5 +13,8 @@ wheels/
 zig-out/
 .zig-cache/
 
+# Generated .npy files are in this directory
+test-data/
+
 # MacOS files
 .DS_Store
