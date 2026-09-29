@@ -12,27 +12,28 @@ pub fn isConstPtr(comptime PtrType: type) bool {
 
 /// Calculates a pointer offset from a base pointer using stride-based offset.
 ///
-/// - `base_ptr` MUST point to "Logical Index 0" of the array
+/// - `base_ptr` MUST be a non-nullable many-item pointer that points to "Logical Index 0" of the array
 /// - `offset` MUST be a valid stride offset, such that the resulting pointer MUST be within the allocated buffer
 /// - `offset` is in element strides, not bytes
 ///
 /// Returns a single-item pointer to the element at the given stride offset.
 /// The returned pointer type preserves constness from the base pointer type.
-pub fn ptrFromOffset(comptime T: type, base_ptr: anytype, offset: isize) if (isConstPtr(@TypeOf(base_ptr))) *const T else *T {
-    // 1. Get the base address as an integer
-    const base_addr = @intFromPtr(base_ptr);
+pub fn ptrFromOffset(comptime T: type, base_ptr: anytype, offset: isize) if (isConstManyItemPtr(@TypeOf(base_ptr))) *const T else *T {
+    if (@sizeOf(T) == 0) return @ptrCast(base_ptr); // all zero-sized elements alias to a single pointer
+    return if (offset < 0) &(base_ptr - @abs(offset))[0] else &base_ptr[@abs(offset)];
+}
 
-    // 2. Calculate the byte-level offset.
-    // We multiply the logical offset by the size of the element.
-    const byte_offset = offset * @as(isize, @intCast(@sizeOf(T)));
-
-    // 3. Use wrapping addition to handle negative or positive offsets.
-    // Bit-casting the signed isize to usize allows the CPU to use
-    // two's-complement arithmetic to "jump" backwards or forwards.
-    const target_addr = base_addr +% @as(usize, @bitCast(byte_offset));
-
-    // 4. Return the resulting single-item pointer
-    return @ptrFromInt(target_addr);
+/// Returns true if the pointer type is const, false otherwise.
+/// PtrType must be a non-nullable many-item pointer, otherwise compile error.
+pub fn isConstManyItemPtr(comptime PtrType: type) bool {
+    return switch (@typeInfo(PtrType)) {
+        .pointer => |ptr_info| blk: {
+            if (ptr_info.size != .many) @compileError("Expected many-item pointer, got " ++ @tagName(ptr_info.size));
+            if (ptr_info.is_allowzero) @compileError("Epected non-null pointer");
+            break :blk ptr_info.is_const;
+        },
+        else => @compileError("Expected pointer type, got " ++ @typeName(PtrType)),
+    };
 }
 
 /// Returns a non-null, properly aligned, but "dangling" pointer for a given type.
