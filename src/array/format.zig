@@ -205,7 +205,7 @@ pub fn Formatter(comptime T: type) type {
             const new_data_ptr_single = pointer_mod.ptrFromOffset(
                 T,
                 array_view.data_ptr,
-                // elem_idx is guaranteed to be less than dim size, which means less than isize max
+                // elem_idx is assumed to be less than dim size, which means less than isize max
                 @as(isize, @intCast(elem_idx)) * array_view.strides[0],
             );
             const new_data_ptr: [*]const T = @ptrCast(new_data_ptr_single);

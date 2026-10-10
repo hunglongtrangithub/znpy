@@ -68,24 +68,19 @@ fn toSlice(comptime value: anytype) Slice {
     const value_type_info = @typeInfo(ValueType);
 
     switch (value_type_info) {
-        // Single integer (comptime known)
         .comptime_int => {
             const v: isize = @intCast(value);
             return Slice{ .Index = v };
         },
-        // Normal integers
         .int => {
             const v = value;
             return Slice{ .Index = v };
         },
-        // A `struct` — treat as Range
         .@"struct" => {
             const fields = value_type_info.@"struct".fields;
 
-            // Default range
             var range = Range{};
 
-            // Populate fields by count
             switch (fields.len) {
                 0 => {},
                 1 => {
@@ -158,7 +153,7 @@ fn assignInt(field: *isize, val: anytype, comptime field_name: []const u8) void 
             field.* = @intCast(val);
         },
         .null => {
-            // Null passed to non-optional field - skip assignment (keep default)
+            // Null passed to non-optional field -> skip assignment (keep default)
         },
         .optional => |opt| {
             switch (@typeInfo(opt.child)) {

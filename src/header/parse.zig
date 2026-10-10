@@ -23,7 +23,6 @@ const Ast = union(enum) {
             .Map => |map| {
                 var it = map.iterator();
                 while (it.next()) |entry| {
-                    // TODO: Recursively deinit the value AST. Is there a better approach?
                     entry.value_ptr.deinit(allocator);
                 }
                 var mut_map = map;
