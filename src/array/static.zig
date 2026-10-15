@@ -71,6 +71,9 @@ pub fn StaticArray(
         shape: shape_mod.StaticShape(rank),
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []T,
+        /// Alignment used when allocating/freeing `data_buffer`.
+        /// `null` means natural alignment (`@alignOf(T)`).
+        data_alignment: ?std.mem.Alignment = null,
 
         const Self = @This();
 
@@ -96,9 +99,35 @@ pub fn StaticArray(
             };
         }
 
+        pub fn initAligned(
+            dims: [rank]usize,
+            order: shape_mod.Order,
+            comptime alignment: std.mem.Alignment,
+            allocator: std.mem.Allocator,
+        ) InitError!Self {
+            const shape = try shape_mod.StaticShape(rank).init(
+                dims,
+                order,
+                element_type,
+            );
+
+            // Allocate the data buffer
+            const data_buffer = try allocator.alignedAlloc(T, alignment, shape.numElements());
+
+            return Self{
+                .shape = shape,
+                .data_buffer = data_buffer,
+                .data_alignment = alignment,
+            };
+        }
+
         /// Deinitialize the array, freeing the data buffer.
         pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
-            allocator.free(self.data_buffer);
+            const alignment = self.data_alignment orelse std.mem.Alignment.of(T);
+            const bytes: []u8 = @ptrCast(self.data_buffer);
+            if (bytes.len != 0) {
+                allocator.rawFree(bytes, alignment, @returnAddress());
+            }
         }
 
         /// Create a `StaticArray` from a numpy file buffer.
@@ -161,6 +190,7 @@ pub fn StaticArray(
             return Self{
                 .shape = shape,
                 .data_buffer = data_buffer,
+                .data_alignment = alignment,
             };
         }
 
@@ -666,6 +696,17 @@ test "StaticArray.init" {
     try std.testing.expectEqualSlices(usize, &[_]usize{ 2, 2, 2 }, &array3d.shape.dims);
     try std.testing.expect(array3d.shape.order == .C);
     try std.testing.expectEqual(8, array3d.data_buffer.len);
+}
+
+test "StaticArray.initAligned" {
+    const allocator = std.testing.allocator;
+
+    // Test 1D array
+    const Array1D = StaticArray(f64, 1);
+    const dims1d = [_]usize{5};
+    var array1d = try Array1D.initAligned(dims1d, .C, .@"64", allocator);
+    defer array1d.deinit(allocator);
+    try std.testing.expect(std.mem.isAligned(@intFromPtr(array1d.data_buffer.ptr), 64));
 }
 
 test "StaticArray.deinit" {

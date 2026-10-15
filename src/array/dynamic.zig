@@ -64,6 +64,9 @@ pub fn DynamicArray(comptime T: type) type {
         shape: shape_mod.DynamicShape,
         /// The data buffer for memory management (allocation/deallocation)
         data_buffer: []T,
+        /// Alignment used when allocating/freeing `data_buffer`.
+        /// `null` means natural alignment (`@alignOf(T)`).
+        data_alignment: ?std.mem.Alignment = null,
 
         const Self = @This();
 
@@ -90,9 +93,36 @@ pub fn DynamicArray(comptime T: type) type {
             };
         }
 
+        pub fn initAligned(
+            dims: []const usize,
+            order: shape_mod.Order,
+            comptime alignment: std.mem.Alignment,
+            allocator: std.mem.Allocator,
+        ) InitError!Self {
+            const shape = try shape_mod.DynamicShape.init(
+                dims,
+                order,
+                element_type,
+                allocator,
+            );
+
+            // Allocate the data buffer
+            const data_buffer = try allocator.alignedAlloc(T, alignment, shape.numElements());
+
+            return Self{
+                .shape = shape,
+                .data_buffer = data_buffer,
+                .data_alignment = alignment,
+            };
+        }
+
         /// Deinitialize the array, freeing the data buffer and shape.
         pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
-            allocator.free(self.data_buffer);
+            const alignment = self.data_alignment orelse std.mem.Alignment.of(T);
+            const bytes: []u8 = @ptrCast(self.data_buffer);
+            if (bytes.len != 0) {
+                allocator.rawFree(bytes, alignment, @returnAddress());
+            }
             self.shape.deinit(allocator);
         }
 
@@ -161,6 +191,7 @@ pub fn DynamicArray(comptime T: type) type {
             return Self{
                 .shape = shape,
                 .data_buffer = data_buffer,
+                .data_alignment = alignment,
             };
         }
 
@@ -511,6 +542,17 @@ test "DynamicArray.init" {
     try std.testing.expectEqualSlices(usize, &dims3d, array3d.shape.dims);
     try std.testing.expect(array3d.shape.order == .C);
     try std.testing.expectEqual(8, array3d.data_buffer.len);
+}
+
+test "DynamicArray.initAligned" {
+    const allocator = std.testing.allocator;
+
+    // Test 1D array
+    const Array1D = DynamicArray(f64);
+    const dims1d = [_]usize{5};
+    var array1d = try Array1D.initAligned(&dims1d, .C, .@"64", allocator);
+    defer array1d.deinit(allocator);
+    try std.testing.expect(std.mem.isAligned(@intFromPtr(array1d.data_buffer.ptr), 64));
 }
 
 test "DynamicArray.deinitMetadata" {
