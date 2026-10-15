@@ -388,7 +388,7 @@ test "StaticArrayView(i32, 3) - 3D array C order" {
     const StaticView3D = StaticArray(i32, 3);
 
     // 2x3x4 array
-    var data = [_]i32{0} ** 24;
+    var data: [24]i32 = @splat(0);
     for (0..24) |i| {
         data[i] = @intCast(i);
     }
@@ -414,7 +414,7 @@ test "StaticArrayView(f32, 2) - Fortran order strides" {
     const StaticView2D = StaticArray(f32, 2);
 
     // 3x4 array in Fortran order
-    var data = [_]f32{0} ** 12;
+    var data: [12]f32 = @splat(0);
     for (0..12) |i| {
         data[i] = @floatFromInt(i);
     }
@@ -501,7 +501,7 @@ test "StaticArrayView(i32, 4) - 4D array" {
     const StaticView4D = StaticArray(i32, 4);
 
     // 2x2x2x2 array
-    var data = [_]i32{0} ** 16;
+    var data: [16]i32 = @splat(0);
     for (0..16) |i| {
         data[i] = @intCast(i);
     }

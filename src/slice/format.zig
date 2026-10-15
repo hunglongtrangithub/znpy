@@ -46,12 +46,13 @@ pub fn format_slice(args: anytype) [args.len]Slice {
         @compileError("expected tuple or struct argument, found " ++ @typeName(ArgsType));
     }
 
-    const fields_info = args_type_info.@"struct".fields;
+    const field_names = args_type_info.@"struct".field_names;
 
-    var result: [fields_info.len]Slice = undefined;
+    var result: [field_names.len]Slice = undefined;
 
-    inline for (fields_info, 0..) |field, i| {
-        result[i] = toSlice(@field(args, field.name));
+    // in Zig 0.17, struct type info is struct-of-arrays style
+    inline for (field_names, 0..) |field_name, i| {
+        result[i] = toSlice(@field(args, field_name));
     }
 
     return result;
@@ -77,26 +78,26 @@ fn toSlice(comptime value: anytype) Slice {
             return Slice{ .Index = v };
         },
         .@"struct" => {
-            const fields = value_type_info.@"struct".fields;
+            const fields = value_type_info.@"struct".field_names;
 
             var range = Range{};
 
             switch (fields.len) {
                 0 => {},
                 1 => {
-                    const f0 = @field(value, fields[0].name);
+                    const f0 = @field(value, fields[0]);
                     assignOptInt(&range.start, f0, "start");
                 },
                 2 => {
-                    const f0 = @field(value, fields[0].name);
-                    const f1 = @field(value, fields[1].name);
+                    const f0 = @field(value, fields[0]);
+                    const f1 = @field(value, fields[1]);
                     assignOptInt(&range.start, f0, "start");
                     assignOptInt(&range.end, f1, "end");
                 },
                 3 => {
-                    const f0 = @field(value, fields[0].name);
-                    const f1 = @field(value, fields[1].name);
-                    const f2 = @field(value, fields[2].name);
+                    const f0 = @field(value, fields[0]);
+                    const f1 = @field(value, fields[1]);
+                    const f2 = @field(value, fields[2]);
                     assignOptInt(&range.start, f0, "start");
                     assignOptInt(&range.end, f1, "end");
                     assignInt(&range.step, f2, "step");

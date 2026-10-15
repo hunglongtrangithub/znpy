@@ -5,7 +5,7 @@ const std = @import("std");
 /// and many pointers ([*]T, [*]const T).
 pub fn isConstPtr(comptime PtrType: type) bool {
     return switch (@typeInfo(PtrType)) {
-        .pointer => |ptr_info| ptr_info.is_const,
+        .pointer => |ptr_info| ptr_info.attrs.@"const",
         else => @compileError("Expected pointer type, got " ++ @typeName(PtrType)),
     };
 }
@@ -29,8 +29,8 @@ pub fn isConstManyItemPtr(comptime PtrType: type) bool {
     return switch (@typeInfo(PtrType)) {
         .pointer => |ptr_info| blk: {
             if (ptr_info.size != .many) @compileError("Expected many-item pointer, got " ++ @tagName(ptr_info.size));
-            if (ptr_info.is_allowzero) @compileError("Epected non-null pointer");
-            break :blk ptr_info.is_const;
+            if (ptr_info.attrs.@"allowzero") @compileError("Epected non-null pointer");
+            break :blk ptr_info.attrs.@"const";
         },
         else => @compileError("Expected pointer type, got " ++ @typeName(PtrType)),
     };

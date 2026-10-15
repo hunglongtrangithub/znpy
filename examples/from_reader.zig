@@ -14,8 +14,9 @@ pub fn main(init: std.process.Init) !void {
     try stdout.print("Loading NPY file from path: {s}\n", .{npy_file_path});
     try stdout.flush();
 
-    var fallback = std.heap.stackFallback(1024, gpa);
-    const allocator = fallback.get();
+    var stack_buffer: [1024]u8 = undefined;
+    var fallback: std.heap.BufferFirstAllocator = .init(&stack_buffer, gpa);
+    const allocator = fallback.allocator();
 
     const file = std.Io.Dir.cwd().openFile(io, npy_file_path, .{ .mode = .read_only }) catch |e| {
         std.debug.print("Failed to open file: {}\n", .{e});

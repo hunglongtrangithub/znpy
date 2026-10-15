@@ -13,7 +13,7 @@ pub const FromHeaderError = error{
 
 pub const InitError = error{
     /// The total size of the shape overflows isize.
-    ShapeSizeOverflow
+    ShapeSizeOverflow,
 };
 
 pub fn StaticShape(comptime rank: usize) type {
@@ -102,7 +102,7 @@ pub fn StaticShape(comptime rank: usize) type {
         /// 1. Be less than the total number of elements in the shape
         /// 2. Fit in isize without overflow
         fn computeStrides(dims: *const [rank]usize, order: shape_mod.Order) [rank]isize {
-            var strides = [_]isize{0} ** rank;
+            var strides: [rank]isize = @splat(0);
 
             // Scalar case: no dimensions, no strides
             if (rank == 0) return strides;

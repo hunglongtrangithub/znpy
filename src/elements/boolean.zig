@@ -81,7 +81,7 @@ test "isAllZeroOrOne - one bad byte" {
 
 test "isAllZeroOrOne - large array with bad bytes" {
     // At the start
-    var large = [_]u8{0} ** 100;
+    var large: [100]u8 = @splat(0);
     large[0] = 3;
     try testing.expect(!isAllZeroOrOne(&large));
     // At the end
@@ -97,7 +97,7 @@ test "isAllZeroOrOne - large array with bad bytes" {
 }
 
 test "isAllZeroOrOne - large valid array" {
-    var large = [_]u8{0} ** 100;
+    var large: [100]u8 = @splat(0);
     for (0..50) |i| {
         large[i] = 1;
     }

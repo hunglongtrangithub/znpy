@@ -254,17 +254,17 @@ pub const Header = struct {
                 try shape_str.appendSlice(allocator, ")");
             },
             1 => {
-                const closing_str = try std.fmt.allocPrint(allocator, "{d},)", .{self.shape[0]});
+                const closing_str = try allocator.print("{d},)", .{self.shape[0]});
                 defer allocator.free(closing_str);
                 try shape_str.appendSlice(allocator, closing_str);
             },
             else => {
                 for (0..self.shape.len - 1) |idx| {
-                    const element_str = try std.fmt.allocPrint(allocator, "{d}, ", .{self.shape[idx]});
+                    const element_str = try allocator.print("{d}, ", .{self.shape[idx]});
                     defer allocator.free(element_str);
                     try shape_str.appendSlice(allocator, element_str);
                 }
-                const closing_str = try std.fmt.allocPrint(allocator, "{d})", .{self.shape[self.shape.len - 1]});
+                const closing_str = try allocator.print("{d})", .{self.shape[self.shape.len - 1]});
                 defer allocator.free(closing_str);
                 try shape_str.appendSlice(allocator, closing_str);
             },
@@ -276,8 +276,7 @@ pub const Header = struct {
             .F => "True",
         };
 
-        const header_str = try std.fmt.allocPrint(
-            allocator,
+        const header_str = try allocator.print(
             "{{'descr': '{s}', 'fortran_order': {s}, 'shape': {s}, }}",
             .{ descr_str, fortran_order_str, shape_str.items },
         );

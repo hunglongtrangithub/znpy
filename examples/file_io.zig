@@ -14,8 +14,9 @@ pub fn main(init: std.process.Init) !void {
     try stdout.print("Loading NPY file from path: {s}\n", .{npy_file_path});
     try stdout.flush();
 
-    var fallback = std.heap.stackFallback(2048, gpa);
-    const allocator = fallback.get();
+    var stack_buffer: [2048]u8 = undefined;
+    var fallback: std.heap.BufferFirstAllocator = .init(&stack_buffer, gpa);
+    const allocator = fallback.allocator();
 
     const cwd = std.Io.Dir.cwd();
 
